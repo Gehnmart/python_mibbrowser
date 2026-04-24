@@ -1,0 +1,4 @@
+PyQt6>=6.6
+pysnmp>=7.1
+pysmi>=1.6
+pyqtgraph>=0.13
