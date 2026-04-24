@@ -350,7 +350,16 @@ class _DiscoveryWorker(QObject):
                                    else net)]
         total = len(hosts)
         live: list[str] = []
-        with ThreadPoolExecutor(max_workers=64) as ex:
+        # NOTE: not using `with ThreadPoolExecutor(...)` here — its
+        # __exit__ calls shutdown(wait=True) which waits for every ping
+        # to finish. On a /24 that's 254 × subprocess ping timeouts,
+        # ~60s of hang on app close. We want a bail-out path: when the
+        # user cancels mid-sweep, we shutdown(wait=False,
+        # cancel_futures=True) and return immediately; pending pings
+        # are dropped, already-running ones (≤ 64 concurrent at the
+        # subprocess level) will exit when their own ping finishes.
+        ex = ThreadPoolExecutor(max_workers=64)
+        try:
             futures = {ex.submit(_ping_once, h): h for h in hosts}
             for i, fut in enumerate(as_completed(futures), start=1):
                 if self._cancel:
@@ -368,6 +377,12 @@ class _DiscoveryWorker(QObject):
                 if self._snmp:
                     sysname, sysdescr = self._probe_snmp(h)
                 self.result.emit(h, rtt, sysname, sysdescr)
+        finally:
+            # cancel_futures requires Python 3.9+; drops anything not
+            # yet started. wait=False lets the running ping subprocesses
+            # finish in the background — they close their own sockets
+            # and exit within the per-ping timeout we already set.
+            ex.shutdown(wait=False, cancel_futures=True)
 
         self.done.emit(len(live))
 
