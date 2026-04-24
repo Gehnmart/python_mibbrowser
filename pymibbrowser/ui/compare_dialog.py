@@ -40,7 +40,7 @@ from PyQt6.QtWidgets import (
     QVBoxLayout,
 )
 
-from .. import snmp_ops
+from .. import snmp_ops, workers
 from ..config import Agent, AppSettings
 from ..i18n import _t
 
@@ -479,6 +479,6 @@ class CompareDialog(QDialog):
     def closeEvent(self, ev) -> None:
         self._stop()
         for t in (self._thread_l, self._thread_r):
-            if t is not None and t.isRunning():
-                t.wait(800)
+            if t is not None:
+                workers.wait_if_running(t, 800)
         super().closeEvent(ev)

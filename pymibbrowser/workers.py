@@ -69,6 +69,28 @@ def run_op(parent: QObject, fn: Callable[..., Any],
     return thread, worker
 
 
+def wait_if_running(thread, ms: int = 800) -> None:
+    """Block up to `ms` for this QThread to finish — but survive the
+    race where Qt has already deleted the underlying C++ object since
+    we last saw it running.
+
+    The catch is that QThread's `thread.finished.connect(thread.deleteLater)`
+    fires the moment work finishes, which can happen between the time
+    we read pool and the time we call isRunning(). Accessing any method
+    on the half-dead SIP proxy raises RuntimeError — so wrap the whole
+    chain, not just the wait()."""
+    from PyQt6.sip import isdeleted
+    try:
+        if isdeleted(thread):
+            return
+        if not thread.isRunning():
+            return
+        thread.wait(ms)
+    except (RuntimeError, TypeError):
+        # C++ half already collected; nothing to wait on.
+        pass
+
+
 def prune_threads(pool: list) -> None:
     """Drop refs to QThread objects that have already finished.
 

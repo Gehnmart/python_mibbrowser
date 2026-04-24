@@ -30,7 +30,7 @@ from PyQt6.QtWidgets import (
     QVBoxLayout,
 )
 
-from .. import snmp_ops
+from .. import snmp_ops, workers
 from ..config import Agent
 from ..i18n import _t
 
@@ -271,6 +271,6 @@ class SaveWalkDialog(QDialog):
 
     def closeEvent(self, ev) -> None:
         self._stop()
-        if self._thread is not None and self._thread.isRunning():
-            self._thread.wait(1000)
+        if self._thread is not None:
+            workers.wait_if_running(self._thread, 1000)
         super().closeEvent(ev)

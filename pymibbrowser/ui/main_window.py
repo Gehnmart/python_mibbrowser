@@ -2043,9 +2043,10 @@ class MibBrowserWindow(QMainWindow):
                         except Exception:
                             pass
             # Wait (briefly) for active SNMP threads the main window and
-            # each tab spun off. 800ms budget each — plenty for a GET,
-            # and we'd rather close slightly late than abort.
-            from PyQt6.QtCore import QThread
+            # each tab spun off. Prune first so we don't walk into a
+            # SIP-dead QThread skeleton, and use wait_if_running for a
+            # last-mile race guard (thread may die between the prune
+            # and the wait call).
             pools: list[list] = [self._active_threads]
             for i in range(self.tabs.count()):
                 w = self.tabs.widget(i)
@@ -2053,10 +2054,7 @@ class MibBrowserWindow(QMainWindow):
                 if isinstance(at, list):
                     pools.append(at)
             for pool in pools:
-                for t in pool:
-                    if isinstance(t, QThread) and t.isRunning():
-                        try:
-                            t.wait(800)
-                        except Exception:
-                            pass
+                workers.prune_threads(pool)
+                for t in list(pool):
+                    workers.wait_if_running(t, 800)
             super().closeEvent(event)

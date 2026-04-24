@@ -39,7 +39,7 @@ from PyQt6.QtWidgets import (
     QVBoxLayout,
 )
 
-from .. import snmp_ops
+from .. import snmp_ops, workers
 from ..config import Agent
 from ..i18n import _t
 
@@ -202,8 +202,8 @@ class _StreamDialog(QDialog):
 
     def closeEvent(self, ev) -> None:
         self._stop()
-        if self._thread is not None and self._thread.isRunning():
-            self._thread.wait(500)
+        if self._thread is not None:
+            workers.wait_if_running(self._thread, 500)
         super().closeEvent(ev)
 
 
@@ -575,6 +575,6 @@ class DiscoveryDialog(QDialog):
 
     def closeEvent(self, ev) -> None:
         self._stop()
-        if self._thread is not None and self._thread.isRunning():
-            self._thread.wait(800)
+        if self._thread is not None:
+            workers.wait_if_running(self._thread, 800)
         super().closeEvent(ev)
