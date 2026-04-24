@@ -9,7 +9,6 @@ import pytest
 
 from pymibbrowser import script_runner
 from pymibbrowser.config import Agent
-from pymibbrowser.mib_loader import MibNode, MibTree
 from pymibbrowser.snmp_ops import VarBind
 
 

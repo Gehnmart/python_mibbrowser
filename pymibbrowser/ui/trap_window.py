@@ -4,22 +4,41 @@ from __future__ import annotations
 import json
 import re
 import time
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Optional
 
-from PyQt6.QtCore import (QAbstractTableModel, QModelIndex, QObject, Qt,
-                          QSortFilterProxyModel, pyqtSignal)
+from PyQt6.QtCore import (
+    QAbstractTableModel,
+    QModelIndex,
+    QObject,
+    QSortFilterProxyModel,
+    Qt,
+    pyqtSignal,
+)
 from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import (
-    QCheckBox, QComboBox, QDialog, QDialogButtonBox, QFileDialog, QFormLayout,
-    QHBoxLayout, QHeaderView, QInputDialog, QLabel, QLineEdit, QMainWindow,
-    QMessageBox, QPushButton, QSplitter, QStatusBar, QTableView, QTextBrowser,
-    QToolBar, QVBoxLayout, QWidget,
+    QComboBox,
+    QDialog,
+    QDialogButtonBox,
+    QFileDialog,
+    QFormLayout,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QMainWindow,
+    QMessageBox,
+    QPushButton,
+    QSplitter,
+    QStatusBar,
+    QTableView,
+    QTextBrowser,
+    QToolBar,
+    QVBoxLayout,
+    QWidget,
 )
 
-from ..i18n import _t
 from .. import config
+from ..i18n import _t
 from ..mib_loader import MibTree
 from ..trap_receiver import TrapEvent, TrapListener
 
@@ -141,7 +160,7 @@ class TrapTableModel(QAbstractTableModel):
             return _t(TRAP_COLS[s])
         return None
 
-    def get(self, row: int) -> Optional[TrapEvent]:
+    def get(self, row: int) -> TrapEvent | None:
         if 0 <= row < len(self._rows):
             return self._rows[row]
         return None
@@ -256,7 +275,7 @@ class TrapReceiverWindow(QMainWindow):
         self.resize(1000, 640)
         self.tree = tree
         self.settings = settings
-        self.listener: Optional[TrapListener] = None
+        self.listener: TrapListener | None = None
         self.rules: list[TrapRule] = self._load_rules()
         self._rules_ignored_count = 0
 
@@ -347,7 +366,7 @@ class TrapReceiverWindow(QMainWindow):
         self.details.setOpenExternalLinks(False)
         self.details.setOpenLinks(False)
         self.details.anchorClicked.connect(self._on_detail_anchor)
-        self._current_ev: Optional[TrapEvent] = None
+        self._current_ev: TrapEvent | None = None
         split.addWidget(self.details)
         split.setSizes([380, 220])
         self.setCentralWidget(split)
@@ -436,7 +455,8 @@ class TrapReceiverWindow(QMainWindow):
         """Fire-and-forget shell exec for a rule's Run Command. We never
         block the trap loop — if the command hangs, that's its problem,
         not ours."""
-        import shlex, subprocess
+        import shlex
+        import subprocess
         try:
             subprocess.Popen(
                 shlex.split(cmd), stdout=subprocess.DEVNULL,
@@ -448,7 +468,8 @@ class TrapReceiverWindow(QMainWindow):
     def _play_rule_sound(self, path: str) -> None:
         """Play a .wav/.mp3 — prefer paplay (PulseAudio), fall back to
         ffplay. Best-effort; failures are silent but surfaced in status."""
-        import shutil, subprocess
+        import shutil
+        import subprocess
         player = (shutil.which("paplay") or shutil.which("aplay")
                   or shutil.which("ffplay") or shutil.which("mpv"))
         if not player:
@@ -558,7 +579,14 @@ class TrapReceiverWindow(QMainWindow):
 
     def _open_rules(self) -> None:
         # Simple list dialog: add/edit/remove.
-        from PyQt6.QtWidgets import QListWidget, QListWidgetItem, QHBoxLayout, QVBoxLayout, QPushButton, QDialog
+        from PyQt6.QtWidgets import (
+            QDialog,
+            QHBoxLayout,
+            QListWidget,
+            QListWidgetItem,
+            QPushButton,
+            QVBoxLayout,
+        )
         d = QDialog(self); d.setWindowTitle(_t("Trap rules"))
         d.resize(520, 420)
         vb = QVBoxLayout(d)

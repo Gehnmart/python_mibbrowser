@@ -9,8 +9,9 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import Any, Iterable, Optional
+from typing import Any
 
 from pysnmp.hlapi.v3arch.asyncio import (
     CommunityData,
@@ -24,7 +25,6 @@ from pysnmp.hlapi.v3arch.asyncio import (
     get_cmd,
     is_end_of_mib,
     next_cmd,
-    send_notification,
     set_cmd,
     usm3DESEDEPrivProtocol,
     usmAesCfb128Protocol,
@@ -68,7 +68,7 @@ class VarBind:
     display_value: str = ""
 
     @classmethod
-    def from_pysnmp(cls, name, val) -> "VarBind":
+    def from_pysnmp(cls, name, val) -> VarBind:
         oid = tuple(int(x) for x in name.asTuple())
         tn = val.__class__.__name__
         return cls(oid=oid, type_name=tn, value=val, display_value=_display(val))

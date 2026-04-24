@@ -5,8 +5,6 @@ import json
 import os
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Optional
-
 
 APP_NAME = "pymibbrowser"
 
@@ -31,10 +29,10 @@ def compiled_mibs_dir() -> Path:
     return p
 
 
-_log_dir_override: Optional[Path] = None
+_log_dir_override: Path | None = None
 
 
-def set_log_dir_override(path: Optional[str]) -> None:
+def set_log_dir_override(path: str | None) -> None:
     """main() calls this once after reading settings — lets the UI's
     'Change log directory' take effect without plumbing settings through
     every callsite of log_file()."""
@@ -140,7 +138,7 @@ class AppSettings:
     # loaded into the tree. A list (possibly empty) narrows the tree to just
     # those modules — useful when the user has a vendor MIB and doesn't want
     # the standard SMI/SNMPv2 noise alongside it.
-    enabled_mibs: Optional[list[str]] = None
+    enabled_mibs: list[str] | None = None
     # When compiling MIBs, should we fall back to https://mibs.pysnmp.com
     # for modules that aren't in mibs-src/ (or any extra source dir the
     # user added)? Off by default — predictable offline behaviour; users
@@ -182,7 +180,7 @@ class AppSettings:
     }
 
     @classmethod
-    def load(cls) -> "AppSettings":
+    def load(cls) -> AppSettings:
         """Field-driven loader. Adding a new simple field to this
         dataclass — int/str/bool/list/dict/Optional — Just Works with
         no change here. Nested dataclasses register in _NESTED_LOADERS."""

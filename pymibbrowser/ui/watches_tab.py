@@ -18,20 +18,32 @@ from __future__ import annotations
 import json
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
 
-from PyQt6.QtCore import QTimer, Qt
+from PyQt6.QtCore import QTimer
 from PyQt6.QtGui import QBrush, QColor
 from PyQt6.QtWidgets import (
-    QAbstractItemView, QComboBox, QDialog, QDialogButtonBox, QFileDialog,
-    QFormLayout, QHBoxLayout, QLabel, QLineEdit, QMessageBox, QPushButton,
-    QSpinBox, QTableWidget, QTableWidgetItem, QToolBar, QVBoxLayout, QWidget,
+    QAbstractItemView,
+    QComboBox,
+    QDialog,
+    QDialogButtonBox,
+    QFileDialog,
+    QFormLayout,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QMessageBox,
+    QPushButton,
+    QSpinBox,
+    QTableWidget,
+    QTableWidgetItem,
+    QToolBar,
+    QVBoxLayout,
+    QWidget,
 )
 
-from .. import config
+from .. import config, snmp_ops, workers
 from ..config import AppSettings, WatchDefinition
 from ..i18n import _t
-from .. import snmp_ops, workers
 
 
 def _history_path() -> Path:
@@ -74,7 +86,7 @@ OP_CHOICES = ("Get", "Get Next")
 COND_CHOICES = (">", ">=", "<", "<=", "==", "!=")
 
 
-def _evaluate_condition(value: str, op: str, threshold: str) -> Optional[bool]:
+def _evaluate_condition(value: str, op: str, threshold: str) -> bool | None:
     """Return True if condition holds, False if not, None if not comparable.
 
     Tries float comparison first (handles counters, gauges, ints). Falls
@@ -179,7 +191,7 @@ class WatchesTab(QWidget):
         # Remember last evaluated state per-watch (by index) so we can
         # detect ok→alarm / alarm→ok transitions and log them. Value is
         # Optional[bool] — matches _evaluate_condition's return type.
-        self._last_state: dict[int, Optional[bool]] = {}
+        self._last_state: dict[int, bool | None] = {}
 
         self._timer = QTimer(self)
         self._timer.timeout.connect(self._refresh)
@@ -379,7 +391,7 @@ class WatchesTab(QWidget):
         self._active_threads.append(t)
 
     def _record_transition(self, row: int, w: WatchDefinition,
-                           new_state: Optional[bool], value: str,
+                           new_state: bool | None, value: str,
                            agent) -> None:
         """Log if state changed since last eval. Only transitions —
         logging every tick would drown the file in duplicates. First
@@ -413,7 +425,7 @@ class WatchesTab(QWidget):
         HistoryDialog(self).exec()
 
     def _paint_row(self, row: int, value: str, status: str,
-                   ok: Optional[bool], stamp: str) -> None:
+                   ok: bool | None, stamp: str) -> None:
         """Colour the row. Forcing both foreground and background is
         required — a Qt theme-controlled text colour (white on dark
         themes) vs a light pastel background makes the text invisible,

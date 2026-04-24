@@ -15,14 +15,26 @@ from __future__ import annotations
 
 from PyQt6.QtCore import QEvent, QObject, Qt
 from PyQt6.QtWidgets import (
-    QCheckBox, QComboBox, QDialog, QDialogButtonBox, QDoubleSpinBox,
-    QFormLayout, QFrame, QHBoxLayout, QLabel, QLineEdit, QPushButton,
-    QSpinBox, QTabWidget, QVBoxLayout, QWidget, QFileDialog,
+    QCheckBox,
+    QComboBox,
+    QDialog,
+    QDialogButtonBox,
+    QDoubleSpinBox,
+    QFileDialog,
+    QFormLayout,
+    QFrame,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QPushButton,
+    QSpinBox,
+    QTabWidget,
+    QVBoxLayout,
+    QWidget,
 )
 
 from .. import config
 from ..i18n import _t
-
 
 LANG_CHOICES = (("(auto — $LANG)", ""), ("English", "en"), ("Русский", "ru"))
 LOG_LEVELS = ("DEBUG", "INFO", "WARNING", "ERROR")
@@ -32,7 +44,7 @@ class _HintFilter(QObject):
     """Watches Enter/FocusIn events on registered widgets and pushes
     the widget's help-string to the dialog's status strip."""
 
-    def __init__(self, dialog: "PreferencesDialog") -> None:
+    def __init__(self, dialog: PreferencesDialog) -> None:
         super().__init__(dialog)
         self._dlg = dialog
 

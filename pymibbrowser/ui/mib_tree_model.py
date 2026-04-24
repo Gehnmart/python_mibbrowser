@@ -13,9 +13,8 @@ item, and it's what the rest of the app gets back via `node_for_index`.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Optional
 
-from PyQt6.QtCore import QAbstractItemModel, QModelIndex, Qt, QSortFilterProxyModel
+from PyQt6.QtCore import QAbstractItemModel, QModelIndex, QSortFilterProxyModel, Qt
 
 from ..mib_loader import MibNode, MibTree
 
@@ -24,8 +23,8 @@ from ..mib_loader import MibNode, MibTree
 class VirtNode:
     display: str                        # "iso.org.dod…mib-2"
     real: MibNode                       # tail of the collapsed chain
-    parent: Optional["VirtNode"] = None
-    children: list["VirtNode"] = field(default_factory=list)
+    parent: VirtNode | None = None
+    children: list[VirtNode] = field(default_factory=list)
 
 
 # Roles that mark a node as a *real item* (table, row, scalar, column,
@@ -45,7 +44,7 @@ def _is_folder(n: MibNode) -> bool:
     return True
 
 
-def _collapse(real: MibNode, parent_v: Optional[VirtNode],
+def _collapse(real: MibNode, parent_v: VirtNode | None,
               oid_map: dict[tuple[int, ...], VirtNode]) -> VirtNode:
     """Walk down a single-child chain of *folders* from `real` and build
     one VirtNode whose label is the dotted concatenation. Record every
@@ -194,7 +193,7 @@ class MibTreeModel(QAbstractItemModel):
             return index.internalPointer()  # type: ignore[return-value]
         return self._root_v
 
-    def node_for_index(self, index: QModelIndex) -> Optional[MibNode]:
+    def node_for_index(self, index: QModelIndex) -> MibNode | None:
         """Return the *real* MibNode behind a QModelIndex — i.e. the tail
         of whatever collapsed chain is shown there. The rest of the app
         doesn't need to know about virtual nodes."""
@@ -209,7 +208,7 @@ class MibTreeModel(QAbstractItemModel):
             return QModelIndex()
         # Walk ancestors back to the root to build the index chain.
         chain: list[VirtNode] = []
-        cur: Optional[VirtNode] = v
+        cur: VirtNode | None = v
         while cur is not None and cur is not self._root_v:
             chain.append(cur)
             cur = cur.parent

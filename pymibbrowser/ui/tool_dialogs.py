@@ -7,24 +7,34 @@ Tools dialogs:
 """
 from __future__ import annotations
 
-import os
 from pathlib import Path
 
 from PyQt6.QtCore import QObject, Qt, pyqtSignal
-from PyQt6.QtGui import QAction, QFont
+from PyQt6.QtGui import QFont
 from PyQt6.QtWidgets import (
-    QCheckBox, QComboBox, QDialog, QDialogButtonBox, QFileDialog, QFormLayout,
-    QHBoxLayout, QLabel, QLineEdit, QMessageBox, QPlainTextEdit, QPushButton,
-    QSpinBox, QSplitter, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget,
+    QComboBox,
+    QDialog,
+    QFileDialog,
+    QFormLayout,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QMessageBox,
+    QPlainTextEdit,
+    QPushButton,
+    QSpinBox,
+    QSplitter,
+    QTableWidget,
+    QTableWidgetItem,
+    QVBoxLayout,
 )
 
-from ..i18n import _t
 from .. import config, trap_sender
 from ..config import Agent
+from ..i18n import _t
 from ..mib_loader import MibTree
 from ..simulator import SnmpAgentSim
-from ..trap_receiver import TrapListener, TrapEvent
-
+from ..trap_receiver import TrapEvent, TrapListener
 
 # ---------------------------------------------------------------------------
 # Trap sender
@@ -259,12 +269,14 @@ class MibEditorDialog(QDialog):
     def _check(self) -> None:
         # Run pysmi on this buffer (to tmp file) and show diagnostics.
         import tempfile
+
         from pysmi.codegen import JsonCodeGen
         from pysmi.compiler import MibCompiler
         from pysmi.parser import SmiV1CompatParser
         from pysmi.reader import FileReader
         from pysmi.searcher import AnyFileSearcher, StubSearcher
         from pysmi.writer import FileWriter
+
         from ..mib_loader import STUB_MIBS
 
         with tempfile.TemporaryDirectory() as tmpd:

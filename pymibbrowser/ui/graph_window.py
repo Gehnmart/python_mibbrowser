@@ -4,19 +4,25 @@ from __future__ import annotations
 import csv
 import time
 from collections import deque
-from typing import Optional
 
 import pyqtgraph as pg
-from PyQt6.QtCore import QTimer, Qt
+from PyQt6.QtCore import QTimer
 from PyQt6.QtWidgets import (
-    QCheckBox, QFileDialog, QHBoxLayout, QLabel, QLineEdit, QMessageBox,
-    QPushButton, QSpinBox, QToolBar, QVBoxLayout, QWidget,
+    QCheckBox,
+    QFileDialog,
+    QLabel,
+    QLineEdit,
+    QMessageBox,
+    QPushButton,
+    QSpinBox,
+    QToolBar,
+    QVBoxLayout,
+    QWidget,
 )
 
-from ..i18n import _t
 from .. import snmp_ops, workers
 from ..config import Agent
-
+from ..i18n import _t
 
 MAX_POINTS = 600
 
@@ -33,8 +39,8 @@ class GraphTab(QWidget):
 
         self._t: deque = deque(maxlen=self._max_points)
         self._v: deque = deque(maxlen=self._max_points)
-        self._last_raw_t: Optional[float] = None
-        self._last_raw_v: Optional[float] = None
+        self._last_raw_t: float | None = None
+        self._last_raw_v: float | None = None
         self._paused = False
         self._rate_mode = False
         self._timer = QTimer(self)
@@ -219,7 +225,7 @@ class GraphTab(QWidget):
         with open(path, "w", newline="") as f:
             w = csv.writer(f)
             w.writerow(["t_seconds", "value"])
-            for t, v in zip(self._t, self._v):
+            for t, v in zip(self._t, self._v, strict=False):
                 w.writerow([f"{t:.3f}", v])
 
     def _import_csv(self) -> None:

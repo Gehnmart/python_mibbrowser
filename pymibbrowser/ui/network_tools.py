@@ -17,20 +17,31 @@ import shutil
 import subprocess
 import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import Optional
 
 from PyQt6.QtCore import QObject, Qt, QThread, pyqtSignal
 from PyQt6.QtGui import QFont
 from PyQt6.QtWidgets import (
-    QAbstractItemView, QDialog, QDialogButtonBox, QFileDialog, QHBoxLayout,
-    QHeaderView, QLabel, QLineEdit, QMessageBox, QPlainTextEdit, QProgressBar,
-    QPushButton, QSpinBox, QTableWidget, QTableWidgetItem, QVBoxLayout,
+    QAbstractItemView,
+    QDialog,
+    QDialogButtonBox,
+    QFileDialog,
+    QHBoxLayout,
+    QHeaderView,
+    QLabel,
+    QLineEdit,
+    QMessageBox,
+    QPlainTextEdit,
+    QProgressBar,
+    QPushButton,
+    QSpinBox,
+    QTableWidget,
+    QTableWidgetItem,
+    QVBoxLayout,
 )
 
+from .. import snmp_ops
 from ..config import Agent
 from ..i18n import _t
-from .. import snmp_ops
-
 
 # ---------------------------------------------------------------------------
 # Subprocess-streaming worker — used by both ping and traceroute
@@ -44,7 +55,7 @@ class _StreamWorker(QObject):
     def __init__(self, argv: list[str]) -> None:
         super().__init__()
         self._argv = argv
-        self._proc: Optional[subprocess.Popen] = None
+        self._proc: subprocess.Popen | None = None
         self._cancel = False
 
     def run(self) -> None:
@@ -102,8 +113,8 @@ class _StreamDialog(QDialog):
         super().__init__(parent)
         self.setWindowTitle(_t(self.default_title))
         self.resize(720, 440)
-        self._thread: Optional[QThread] = None
-        self._worker: Optional[_StreamWorker] = None
+        self._thread: QThread | None = None
+        self._worker: _StreamWorker | None = None
 
         v = QVBoxLayout(self)
         row = QHBoxLayout()
@@ -141,7 +152,7 @@ class _StreamDialog(QDialog):
         """Populate the left half of the toolbar row with host/count/etc."""
         raise NotImplementedError
 
-    def _build_argv(self) -> Optional[list[str]]:
+    def _build_argv(self) -> list[str] | None:
         """Translate current inputs to argv. Return None to cancel (e.g.
         no host entered, or the required binary isn't installed — in
         which case the subclass should also print an explanation)."""
@@ -218,7 +229,7 @@ class PingDialog(_StreamDialog):
         self.count_edit.setValue(5)
         row.addWidget(self.count_edit)
 
-    def _build_argv(self) -> Optional[list[str]]:
+    def _build_argv(self) -> list[str] | None:
         host = self.host_edit.text().strip()
         if not host:
             return None
@@ -253,7 +264,7 @@ class TracerouteDialog(_StreamDialog):
         self.hops_edit.setValue(30)
         row.addWidget(self.hops_edit)
 
-    def _build_argv(self) -> Optional[list[str]]:
+    def _build_argv(self) -> list[str] | None:
         host = self.host_edit.text().strip()
         if not host:
             return None
@@ -282,7 +293,7 @@ SYS_NAME_OID = (1, 3, 6, 1, 2, 1, 1, 5, 0)
 SYS_DESCR_OID = (1, 3, 6, 1, 2, 1, 1, 1, 0)
 
 
-def _ping_once(host: str, timeout_ms: int = 500) -> Optional[float]:
+def _ping_once(host: str, timeout_ms: int = 500) -> float | None:
     """Return RTT in ms or None. One packet, short timeout."""
     try:
         # -W is seconds on Linux, milliseconds / msec on macOS. We use
@@ -385,8 +396,8 @@ class DiscoveryDialog(QDialog):
         self.resize(820, 520)
         self._current_agent_fn = current_agent_fn
         self._settings = settings        # optional — needed for Add-to-saved
-        self._thread: Optional[QThread] = None
-        self._worker: Optional[_DiscoveryWorker] = None
+        self._thread: QThread | None = None
+        self._worker: _DiscoveryWorker | None = None
 
         v = QVBoxLayout(self)
         row = QHBoxLayout()

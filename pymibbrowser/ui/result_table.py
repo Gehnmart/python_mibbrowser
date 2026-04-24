@@ -1,7 +1,7 @@
 """Result-table model for SNMP query results."""
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Any
 
 from PyQt6.QtCore import QAbstractTableModel, QModelIndex, Qt
 
@@ -9,12 +9,11 @@ from ..i18n import _t
 from ..mib_loader import MibTree
 from ..snmp_ops import VarBind
 
-
 COLUMNS = ("Name/OID", "Value", "Type", "IP:Port")
 
 
 class ResultTableModel(QAbstractTableModel):
-    def __init__(self, tree: Optional[MibTree] = None) -> None:
+    def __init__(self, tree: MibTree | None = None) -> None:
         super().__init__()
         self._tree = tree
         self._rows: list[tuple[VarBind, str]] = []   # (vb, source_host)

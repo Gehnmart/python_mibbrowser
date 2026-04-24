@@ -16,14 +16,19 @@ from __future__ import annotations
 
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import (
-    QAbstractItemView, QHBoxLayout, QLabel, QPushButton, QTableWidget,
-    QTableWidgetItem, QToolBar, QVBoxLayout, QWidget,
+    QAbstractItemView,
+    QLabel,
+    QPushButton,
+    QTableWidget,
+    QTableWidgetItem,
+    QToolBar,
+    QVBoxLayout,
+    QWidget,
 )
 
+from .. import snmp_ops, workers
 from ..config import AppSettings
 from ..i18n import _t
-from .. import snmp_ops, workers
-
 
 # Known scalar OIDs we pull in one GET.
 _BASIC_SCALARS = [
@@ -190,7 +195,7 @@ class DeviceSnapshotTab(QWidget):
     def _render_ifs(self) -> None:
         rows = sorted(self._if_rows.items(), key=lambda kv: kv[0])
         self.if_tbl.setRowCount(len(rows))
-        for r, (suffix, cols) in enumerate(rows):
+        for r, (_suffix, cols) in enumerate(rows):
             for c, (cname, _coid) in enumerate(_IF_COLUMNS):
                 val = cols.get(cname, "")
                 item = QTableWidgetItem(val)

@@ -33,6 +33,10 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     "pyinstaller>=6.0",
+    "pytest>=8.0",
+    "ruff>=0.7",
+    "mypy>=1.10",
+    "bandit[toml]>=1.7",
 ]
 
 [project.scripts]
@@ -51,3 +55,133 @@ include-package-data = true
 
 [tool.setuptools.package-data]
 pymibbrowser = ["resources/*"]
+
+
+# ---------------------------------------------------------------------------
+# Linters / type checkers
+# ---------------------------------------------------------------------------
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+extend-exclude = [
+    "build",
+    "dist",
+    ".build-venv",
+    ".venv",
+    "mibs-src",
+]
+
+[tool.ruff.lint]
+# Practical rule set: core pyflakes + pycodestyle + import sorting +
+# a few high-signal bugbear / pyupgrade lints. Deliberately NOT
+# enabling the full N/ANN/DOC families — this is an application, not
+# a library, and style-police noise would bury real findings.
+select = [
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "F",    # pyflakes (undefined names, unused imports)
+    "I",    # isort (import order)
+    "B",    # flake8-bugbear (real bug patterns)
+    "UP",   # pyupgrade (py310+ idioms)
+    "RUF",  # ruff-specific rules
+    "PLE",  # pylint error-level
+]
+ignore = [
+    "E501",     # line length — our own setting is 100, but comments
+                # occasionally stretch. Prefer readable over strict.
+    "E701",     # multiple statements on one line (colon) — we use this
+                # for small Qt widget constructors like "x = X(); x.do()".
+    "E702",     # multiple statements on one line (semicolon) — same reason.
+    "E731",     # lambda assignment — we use plenty of "lambda _=False, x=y: ..."
+                # to capture loop-var bindings for Qt signal handlers.
+    "B008",     # function-call in default argument — QModelIndex() idiom.
+    "B904",     # raise-from — mostly pyasn1 error rethrows; low value.
+    "RUF001",   # Cyrillic / ambiguous chars — we have a Russian translation
+                # dictionary and plenty of "×" / "—" UI glyphs.
+    "RUF002",
+    "RUF003",
+    "RUF012",   # mutable class attributes without ClassVar — common in
+                # Qt widget subclasses.
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Qt-heavy files with many local imports and re-exports.
+"pymibbrowser/ui/main_window.py" = ["E402"]
+# Translation dictionary has intentionally repeated keys (the "last wins"
+# behaviour is how we append alternatives) and is full of Cyrillic
+# homoglyphs — ruff's RUF001-003 and F601 are noise here.
+"pymibbrowser/i18n.py" = ["E501", "RUF001", "RUF002", "RUF003", "F601"]
+"pymibbrowser/ui/*.py" = ["RUF001", "RUF002", "RUF003"]
+"tests/*.py" = ["RUF001", "RUF002", "RUF003"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["pymibbrowser"]
+
+
+[tool.mypy]
+python_version = "3.10"
+# Permissive by default — a 5000-LOC Qt app accumulates too many
+# Any-returning third-party calls to be fully strict. The goal here is
+# to catch *new* regressions in pure-Python modules (config, mib_loader,
+# snmp_ops, watches_tab predicates, compare parser) — not to chase
+# PyQt's horizontalHeader()-returns-Optional stubs.
+ignore_missing_imports = true
+follow_imports = "silent"
+warn_unused_ignores = true
+warn_redundant_casts = true
+check_untyped_defs = false
+disallow_untyped_defs = false
+disable_error_code = [
+    "union-attr",     # most of these are Qt's over-broad Optional return
+                      # types (QWidget.parent(), QTableWidget.item(), …)
+    "attr-defined",   # our Worker ref pattern (thread._worker_ref = ...)
+    "arg-type",       # Qt's strict overloads don't always accept our
+                      # perfectly-legal subclasses (QBrush on
+                      # setForeground, etc.).
+    "method-assign",  # we monkey-patch QDialog.exec in smoke tests.
+    "func-returns-value",  # `lambda: (setText(x), _open_graph())` idiom —
+                            # tuple-of-void-calls for chained Qt slots.
+    "override",       # QTableWidget method signatures differ subtly from
+                      # QAbstractItemView's (positional vs defaults).
+    "assignment",     # same type-stub mismatches.
+    "call-overload",  # PyQt6-stubs' QShortcut overloads are narrower than
+                      # the runtime class accepts.
+    "unused-ignore",  # we have a few defensive `# type: ignore[...]` that
+                      # the newer stubs happen to no longer need — keep
+                      # them for forward compatibility with older PyQt6.
+    "no-redef",       # "missing_enabled" attr set in __init__ and re-
+                      # assigned inside load_compiled — intentional.
+]
+exclude = [
+    "build/",
+    "dist/",
+    "tests/",
+    ".build-venv/",
+    ".venv/",
+]
+
+# Third-party modules with no type stubs.
+[[tool.mypy.overrides]]
+module = ["pysnmp.*", "pysmi.*", "pyqtgraph.*", "pyasn1.*"]
+ignore_missing_imports = true
+
+
+[tool.bandit]
+# Bandit finds security smells. Limit to our own package — not tests,
+# not build artefacts.
+exclude_dirs = ["tests", "build", "dist", ".build-venv", ".venv"]
+skips = [
+    "B101",     # assert statements — we use them in _node_for lookups.
+    "B110",     # try/except/pass — used in save() tolerant error paths.
+    "B112",     # try/except/continue — used in tolerant config/walk
+                # loaders (bad JSON line → skip, don't crash).
+    "B104",     # binding to 0.0.0.0 — the Trap Receiver and the SNMP
+                # Agent Simulator *need* to listen on every interface;
+                # that's user intent, not a vuln.
+    "B404",     # subprocess import — we use it (ping/traceroute/rule
+                # Run Command); that's the feature.
+    "B603",     # subprocess call — same.
+    "B607",     # partial path (e.g. "ping" not "/bin/ping") — standard
+                # practice; we rely on PATH + shutil.which() checks.
+]

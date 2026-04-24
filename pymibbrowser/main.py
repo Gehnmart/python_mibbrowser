@@ -5,10 +5,10 @@ import logging
 import sys
 from pathlib import Path
 
-from PyQt6.QtWidgets import QApplication, QMessageBox, QProgressDialog
 from PyQt6.QtCore import Qt
+from PyQt6.QtWidgets import QApplication, QMessageBox, QProgressDialog
 
-from . import config, mib_loader, i18n
+from . import config, i18n, mib_loader
 
 
 def _setup_logging() -> None:

@@ -1,15 +1,22 @@
 """Small modal dialogs: Agent properties, SET value, input prompts."""
 from __future__ import annotations
 
-from typing import Optional
-
 from PyQt6.QtWidgets import (
-    QComboBox, QDialog, QDialogButtonBox, QFormLayout, QLabel, QLineEdit,
-    QSpinBox, QTabWidget, QVBoxLayout, QWidget, QDoubleSpinBox, QPlainTextEdit,
+    QComboBox,
+    QDialog,
+    QDialogButtonBox,
+    QDoubleSpinBox,
+    QFormLayout,
+    QLabel,
+    QLineEdit,
+    QSpinBox,
+    QTabWidget,
+    QVBoxLayout,
+    QWidget,
 )
 
-from ..i18n import _t
 from ..config import Agent
+from ..i18n import _t
 from ..mib_loader import MibNode
 
 
@@ -100,7 +107,7 @@ class SetDialog(QDialog):
              ("a", "IpAddress"), ("o", "OID"), ("s", "String"),
              ("c", "Counter32"), ("g", "Gauge32"), ("x", "Hex (0x..)")]
 
-    def __init__(self, oid_text: str, node: Optional[MibNode], parent=None) -> None:
+    def __init__(self, oid_text: str, node: MibNode | None, parent=None) -> None:
         super().__init__(parent)
         self.setWindowTitle(f"Set {oid_text}")
 

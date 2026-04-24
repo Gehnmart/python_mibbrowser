@@ -2,13 +2,17 @@
 from __future__ import annotations
 
 import asyncio
-import time
 
 from pysnmp.hlapi.v3arch.asyncio import (
-    CommunityData, ContextData, NotificationType, ObjectIdentity, ObjectType,
-    SnmpEngine, UdpTransportTarget, send_notification,
+    CommunityData,
+    ContextData,
+    NotificationType,
+    ObjectIdentity,
+    ObjectType,
+    SnmpEngine,
+    UdpTransportTarget,
+    send_notification,
 )
-from pysnmp.proto import rfc1902
 
 
 async def _send(host: str, port: int, community: str, version: str,
@@ -19,7 +23,7 @@ async def _send(host: str, port: int, community: str, version: str,
     notif = NotificationType(ObjectIdentity(trap_oid))
     obj_types = [ObjectType(ObjectIdentity(oid), val) for oid, val in var_binds]
     try:
-        err_ind, err_stat, err_idx, _ = await send_notification(
+        err_ind, err_stat, _err_idx, _ = await send_notification(
             engine, CommunityData(community, mpModel=mp), target,
             ContextData(), "trap", notif, *obj_types,
         )

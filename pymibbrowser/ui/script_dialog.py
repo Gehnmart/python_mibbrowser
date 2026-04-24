@@ -11,22 +11,30 @@ This is the discoverable front end for script_runner.run(). Provides:
 """
 from __future__ import annotations
 
-import io
 from pathlib import Path
-from typing import Optional
 
 from PyQt6.QtCore import QObject, Qt, QThread, pyqtSignal
 from PyQt6.QtGui import QFont, QKeySequence, QShortcut
 from PyQt6.QtWidgets import (
-    QDialog, QDialogButtonBox, QFileDialog, QHBoxLayout, QLabel, QLineEdit,
-    QMessageBox, QPlainTextEdit, QPushButton, QSplitter, QTabWidget,
-    QTextBrowser, QVBoxLayout, QWidget,
+    QDialog,
+    QDialogButtonBox,
+    QFileDialog,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QMessageBox,
+    QPlainTextEdit,
+    QPushButton,
+    QSplitter,
+    QTabWidget,
+    QTextBrowser,
+    QVBoxLayout,
+    QWidget,
 )
 
+from .. import script_runner
 from ..config import Agent
 from ..i18n import _t
-from .. import script_runner
-
 
 # ---------------------------------------------------------------------------
 # Reference text (HTML) and canned examples — presented in the Reference tab
@@ -140,8 +148,8 @@ class ScriptDialog(QDialog):
         self.resize(900, 680)
         self.agent = agent
         self.tree = tree
-        self._thread: Optional[QThread] = None
-        self._worker: Optional[_ScriptWorker] = None
+        self._thread: QThread | None = None
+        self._worker: _ScriptWorker | None = None
 
         outer = QVBoxLayout(self)
 

@@ -6,10 +6,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-import pytest
-
 from pymibbrowser.ui.compare_dialog import (
-    parse_walk_file, _unescape_quoted,
+    _unescape_quoted,
+    parse_walk_file,
 )
 from pymibbrowser.ui.save_walk_dialog import _escape_quoted, _format_line
 
@@ -87,7 +86,8 @@ def test_roundtrip_preserves_quotes_and_backslash(tmp_path):
 def _parse_str(contents: str) -> dict:
     """Small helper — write to a temp file so we exercise the real
     parse_walk_file path, but callers pass string literals inline."""
-    import tempfile, os
+    import os
+    import tempfile
     with tempfile.NamedTemporaryFile("w", suffix=".walk",
                                       delete=False) as t:
         t.write(contents)

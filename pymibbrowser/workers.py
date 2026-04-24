@@ -1,12 +1,12 @@
 """QThread-based SNMP workers. Keep the Qt event loop free while pysnmp calls block."""
 from __future__ import annotations
 
-from typing import Any, Callable, Optional
+from collections.abc import Callable
+from typing import Any
 
 from PyQt6.QtCore import QObject, QThread, pyqtSignal
 
 from . import snmp_ops
-from .config import Agent
 
 
 class SnmpWorker(QObject):
@@ -43,7 +43,7 @@ class SnmpWorker(QObject):
 def run_op(parent: QObject, fn: Callable[..., Any],
            on_finished: Callable[[list], None],
            on_failed: Callable[[str], None],
-           on_progress: Optional[Callable[[Any], None]] = None,
+           on_progress: Callable[[Any], None] | None = None,
            *args, **kwargs) -> tuple[QThread, SnmpWorker]:
     """Wire a worker onto a new thread. Returns (thread, worker). Caller keeps
     references."""

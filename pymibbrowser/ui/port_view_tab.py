@@ -17,19 +17,25 @@ Matches iReasoning Port View (clip_image023.jpg).
 from __future__ import annotations
 
 import time
-from typing import Optional
 
-from PyQt6.QtCore import QTimer, Qt, pyqtSignal
-from PyQt6.QtGui import QColor, QPalette
+from PyQt6.QtCore import Qt, QTimer, pyqtSignal
 from PyQt6.QtWidgets import (
-    QFrame, QGridLayout, QHBoxLayout, QLabel, QProgressBar, QPushButton,
-    QScrollArea, QSpinBox, QToolBar, QVBoxLayout, QWidget,
+    QFrame,
+    QGridLayout,
+    QHBoxLayout,
+    QLabel,
+    QProgressBar,
+    QPushButton,
+    QScrollArea,
+    QSpinBox,
+    QToolBar,
+    QVBoxLayout,
+    QWidget,
 )
 
+from .. import snmp_ops, workers
 from ..config import AppSettings
 from ..i18n import _t
-from .. import snmp_ops, workers
-
 
 # ifTable (RFC 2863) columns.
 _IF_DESCR       = (1, 3, 6, 1, 2, 1, 2, 2, 1, 2)
@@ -104,9 +110,9 @@ class PortTile(QFrame):
             self.clicked.emit(self.if_index)
         super().mousePressEvent(ev)
 
-    def update_state(self, descr: str, status: str, util_pct: Optional[float],
-                     speed_bps: Optional[float], if_type: str,
-                     throughput_bps: Optional[float] = None) -> None:
+    def update_state(self, descr: str, status: str, util_pct: float | None,
+                     speed_bps: float | None, if_type: str,
+                     throughput_bps: float | None = None) -> None:
         label = descr or f"#{self.if_index}"
         self.title.setText(f"{label}  (#{self.if_index})")
         # Badge colour reflects ifOperStatus. ifOperStatus is an enum:
@@ -137,7 +143,7 @@ class PortTile(QFrame):
             # Use float in the label so 0.1% traffic on a 1G link is
             # visible; the bar itself is still an int 0..100 (Qt).
             clamped = max(0.0, min(100.0, util_pct))
-            self.bar.setValue(int(round(clamped)))
+            self.bar.setValue(round(clamped))
             self.bar.setFormat(f"{clamped:.2f}%")
 
         sub_parts: list[str] = []
@@ -302,8 +308,8 @@ class PortViewTab(QWidget):
             prev_in = prev.get("in_oct")
             prev_out = prev.get("out_oct")
             prev_t = prev.get("t")
-            util_pct: Optional[float] = None
-            bits_per_s: Optional[float] = None
+            util_pct: float | None = None
+            bits_per_s: float | None = None
             if (prev_in is not None and prev_out is not None
                     and prev_t is not None and in_oct is not None
                     and out_oct is not None):
@@ -372,7 +378,7 @@ class PortViewTab(QWidget):
         cols = max(1, width // 220)
         # Clear grid.
         while self.grid.count():
-            item = self.grid.takeAt(0)
+            self.grid.takeAt(0)
         for i, idx in enumerate(sorted(self._tiles)):
             r, c = divmod(i, cols)
             self.grid.addWidget(self._tiles[idx], r, c)
@@ -405,7 +411,7 @@ class PortViewTab(QWidget):
         super().closeEvent(event)
 
 
-def _parse_float(v) -> Optional[float]:
+def _parse_float(v) -> float | None:
     if v is None:
         return None
     try:
@@ -414,7 +420,7 @@ def _parse_float(v) -> Optional[float]:
         return None
 
 
-def _parse_int(v) -> Optional[int]:
+def _parse_int(v) -> int | None:
     if v is None:
         return None
     try:

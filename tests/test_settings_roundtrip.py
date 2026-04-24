@@ -2,13 +2,14 @@
 field lands in save() but not in load() (or vice versa)."""
 from __future__ import annotations
 
-from pathlib import Path
-
 import pytest
 
-from pymibbrowser import config
 from pymibbrowser.config import (
-    Agent, AppSettings, PollDefinition, PollVariable, WatchDefinition,
+    Agent,
+    AppSettings,
+    PollDefinition,
+    PollVariable,
+    WatchDefinition,
 )
 
 
@@ -84,7 +85,6 @@ def test_save_is_atomic(tmp_xdg, monkeypatch):
     # Monkeypatch Path.replace to raise, so the rename step fails after
     # the .tmp file was written.
     from pathlib import Path as _P
-    real_replace = _P.replace
 
     def boom(self, target):
         raise RuntimeError("simulated crash between write and rename")

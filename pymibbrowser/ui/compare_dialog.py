@@ -16,21 +16,33 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
-from typing import Optional
 
-from PyQt6.QtCore import QObject, Qt, QThread, pyqtSignal
+from PyQt6.QtCore import QObject, QThread, pyqtSignal
 from PyQt6.QtGui import QBrush, QColor
 from PyQt6.QtWidgets import (
-    QAbstractItemView, QCheckBox, QComboBox, QDialog, QDialogButtonBox,
-    QFileDialog, QGroupBox, QHBoxLayout, QHeaderView, QLabel, QLineEdit,
-    QMessageBox, QProgressBar, QPushButton, QRadioButton, QTableWidget,
-    QTableWidgetItem, QVBoxLayout, QWidget,
+    QAbstractItemView,
+    QCheckBox,
+    QComboBox,
+    QDialog,
+    QDialogButtonBox,
+    QFileDialog,
+    QGroupBox,
+    QHBoxLayout,
+    QHeaderView,
+    QLabel,
+    QLineEdit,
+    QMessageBox,
+    QProgressBar,
+    QPushButton,
+    QRadioButton,
+    QTableWidget,
+    QTableWidgetItem,
+    QVBoxLayout,
 )
 
+from .. import snmp_ops
 from ..config import Agent, AppSettings
 from ..i18n import _t
-from .. import snmp_ops
-
 
 # ---------------------------------------------------------------------------
 # Walk-file parsing (snmpwalk -Oq / our SaveWalkDialog output format)
@@ -168,7 +180,7 @@ class _SourcePicker(QGroupBox):
         self._sync_mode()
 
     def _fill_agents(self) -> None:
-        for a in [self.settings.current_agent] + self.settings.saved_agents:
+        for a in [self.settings.current_agent, *self.settings.saved_agents]:
             self.agent_combo.addItem(f"{a.host}:{a.port}")
 
     def _sync_mode(self) -> None:
@@ -215,10 +227,10 @@ class CompareDialog(QDialog):
         self._left: dict[tuple[int, ...], str] = {}
         self._right: dict[tuple[int, ...], str] = {}
         self._pending = 0
-        self._thread_l: Optional[QThread] = None
-        self._thread_r: Optional[QThread] = None
-        self._worker_l: Optional[_WalkCollector] = None
-        self._worker_r: Optional[_WalkCollector] = None
+        self._thread_l: QThread | None = None
+        self._thread_r: QThread | None = None
+        self._worker_l: _WalkCollector | None = None
+        self._worker_r: _WalkCollector | None = None
 
         outer = QVBoxLayout(self)
 
@@ -287,7 +299,7 @@ class CompareDialog(QDialog):
 
     # --- helpers ------------------------------------------------------
 
-    def _resolve_oid(self, text: str) -> Optional[tuple[int, ...]]:
+    def _resolve_oid(self, text: str) -> tuple[int, ...] | None:
         text = text.strip()
         if not text:
             return None

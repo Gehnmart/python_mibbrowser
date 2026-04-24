@@ -13,8 +13,6 @@ to be rebuilt.
 from __future__ import annotations
 
 import os
-from typing import Callable, Optional
-
 
 _RU = {
     # Window titles / menu
@@ -654,7 +652,7 @@ _RU = {
 _current: dict[str, str] = {}
 
 
-def init_language(override: Optional[str] = None) -> None:
+def init_language(override: str | None = None) -> None:
     global _current
     lang = override
     if lang is None:

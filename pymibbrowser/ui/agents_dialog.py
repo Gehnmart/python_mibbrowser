@@ -7,13 +7,18 @@ handles SNMPv3 fields. Keeps one mental model for "editing an agent".
 from __future__ import annotations
 
 from PyQt6.QtWidgets import (
-    QDialog, QDialogButtonBox, QHBoxLayout, QMessageBox,
-    QPushButton, QTableWidget, QTableWidgetItem, QVBoxLayout,
+    QDialog,
+    QDialogButtonBox,
+    QHBoxLayout,
+    QMessageBox,
+    QPushButton,
+    QTableWidget,
+    QTableWidgetItem,
+    QVBoxLayout,
 )
 
 from ..config import Agent, AppSettings
 from ..i18n import _t
-
 
 COLUMNS = ("Host", "Port", "Version", "Read community", "Write community",
            "Timeout", "Retries")

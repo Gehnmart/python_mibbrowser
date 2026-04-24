@@ -6,17 +6,22 @@ schedule. Matches iReasoning's Poll Result tab layout.
 """
 from __future__ import annotations
 
-from typing import Optional
-
-from PyQt6.QtCore import QTimer, Qt
+from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtWidgets import (
-    QAbstractItemView, QFileDialog, QHBoxLayout, QLabel, QPushButton,
-    QTableWidget, QTableWidgetItem, QToolBar, QVBoxLayout, QWidget,
+    QAbstractItemView,
+    QFileDialog,
+    QLabel,
+    QPushButton,
+    QTableWidget,
+    QTableWidgetItem,
+    QToolBar,
+    QVBoxLayout,
+    QWidget,
 )
 
+from .. import snmp_ops, workers
 from ..config import Agent, AppSettings, PollDefinition
 from ..i18n import _t
-from .. import snmp_ops, workers
 
 
 def _agent_key(a: Agent) -> str:
@@ -97,8 +102,8 @@ class PollTab(QWidget):
 
     # Lookup an Agent object by "host:port" key — used to map poll.agents
     # strings back to the full agent config (timeouts, community, …).
-    def _resolve_agent(self, key: str) -> Optional[Agent]:
-        candidates = [self.settings.current_agent] + self.settings.saved_agents
+    def _resolve_agent(self, key: str) -> Agent | None:
+        candidates = [self.settings.current_agent, *self.settings.saved_agents]
         for a in candidates:
             if _agent_key(a) == key:
                 return a
@@ -141,7 +146,7 @@ class PollTab(QWidget):
             if agent is None:
                 continue
             for c, (pv, oid) in enumerate(
-                    zip(self.poll.variables, resolved_oids), start=1):
+                    zip(self.poll.variables, resolved_oids, strict=False), start=1):
                 if not oid:
                     self.tbl.item(r, c).setText("?")
                     continue

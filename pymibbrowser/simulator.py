@@ -15,15 +15,21 @@ import re
 import socket
 import threading
 from dataclasses import dataclass
-from typing import Optional
 
-from pysnmp.proto import api as snmp_api
-from pysnmp.proto import rfc1902, rfc1905
-from pysnmp.proto.rfc1902 import (
-    Counter32, Counter64, Gauge32, Integer, IpAddress, ObjectIdentifier,
-    OctetString, TimeTicks, Unsigned32,
-)
 from pyasn1.codec.ber import decoder, encoder
+from pysnmp.proto import api as snmp_api
+from pysnmp.proto import rfc1905
+from pysnmp.proto.rfc1902 import (
+    Counter32,
+    Counter64,
+    Gauge32,
+    Integer,
+    IpAddress,
+    ObjectIdentifier,
+    OctetString,
+    TimeTicks,
+    Unsigned32,
+)
 
 log = logging.getLogger(__name__)
 
@@ -84,10 +90,10 @@ def load_snmpwalk(path: str) -> dict[tuple[int, ...], object]:
     """Parse net-snmp/iReasoning snmpwalk-style file. Return OID tuple → value."""
     items: dict[tuple[int, ...], object] = {}
     pat = re.compile(r"^\s*\.?([\d.]+)\s*=\s*(?:([A-Za-z0-9-]+):\s*)?(.*)$")
-    current_oid: Optional[tuple[int, ...]] = None
+    current_oid: tuple[int, ...] | None = None
     current_type: str = "STRING"
     current_val: list[str] = []
-    with open(path, "r", encoding="utf-8", errors="replace") as f:
+    with open(path, encoding="utf-8", errors="replace") as f:
         for line in f:
             m = pat.match(line)
             if m:
@@ -118,8 +124,8 @@ class SnmpAgentSim:
     def __init__(self, port: int = 1161, community: str = "public") -> None:
         self.port = port
         self.community = community
-        self._sock: Optional[socket.socket] = None
-        self._thread: Optional[threading.Thread] = None
+        self._sock: socket.socket | None = None
+        self._thread: threading.Thread | None = None
         self._stop = threading.Event()
         self._lock = threading.Lock()
         self._data: dict[tuple[int, ...], object] = {}
@@ -169,10 +175,10 @@ class SnmpAgentSim:
 
     # Handlers --------------------------------------------------------
 
-    def _get(self, oid: tuple[int, ...]) -> Optional[object]:
+    def _get(self, oid: tuple[int, ...]) -> object | None:
         return self._data.get(oid)
 
-    def _next(self, oid: tuple[int, ...]) -> Optional[tuple[tuple[int, ...], object]]:
+    def _next(self, oid: tuple[int, ...]) -> tuple[tuple[int, ...], object] | None:
         # Find smallest key strictly greater.
         import bisect
         i = bisect.bisect_right(self._sorted_keys, oid)
@@ -186,7 +192,7 @@ class SnmpAgentSim:
         while not self._stop.is_set():
             try:
                 data, addr = self._sock.recvfrom(65535)
-            except socket.timeout:
+            except TimeoutError:
                 continue
             except OSError:
                 break
@@ -197,7 +203,7 @@ class SnmpAgentSim:
             except Exception:
                 log.exception("handler error")
 
-    def _handle(self, data: bytes) -> Optional[bytes]:
+    def _handle(self, data: bytes) -> bytes | None:
         # Try v2c first (spec is superset of v1 PDUs); fall back to v1. v1's
         # Message spec lacks SNMPv2 PDU tags (6/7/8) and would raise.
         proto_mod = snmp_api.PROTOCOL_MODULES[snmp_api.SNMP_VERSION_2C]
@@ -275,7 +281,7 @@ class SnmpAgentSim:
                     resp_vbs.append((ObjectIdentifier(".".join(str(p) for p in k)), v))
                     oid_t = k
         elif pdu_type == rfc1905.SetRequestPDU.tagSet:
-            for i, vb in enumerate(var_binds_in, start=1):
+            for _i, vb in enumerate(var_binds_in, start=1):
                 oid_obj, val = proto_mod.apiVarBind.get_oid_value(vb)
                 oid_t = tuple(int(x) for x in oid_obj.asTuple())
                 with self._lock:

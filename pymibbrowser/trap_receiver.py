@@ -5,12 +5,12 @@ import logging
 import socket
 import threading
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Callable, Optional
 
 from pyasn1.codec.ber import decoder
 from pysnmp.proto import api as snmp_api
-from pysnmp.proto import rfc1902, rfc1905
+from pysnmp.proto import rfc1902
 
 log = logging.getLogger(__name__)
 
@@ -38,12 +38,12 @@ class TrapEvent:
 class TrapListener:
     """Threaded UDP listener on a given port."""
     def __init__(self, port: int = 162,
-                 on_trap: Optional[Callable[[TrapEvent], None]] = None,
+                 on_trap: Callable[[TrapEvent], None] | None = None,
                  accept_from: str = "") -> None:
         self.port = port
         self._on_trap = on_trap
-        self._sock: Optional[socket.socket] = None
-        self._thread: Optional[threading.Thread] = None
+        self._sock: socket.socket | None = None
+        self._thread: threading.Thread | None = None
         self._stop = threading.Event()
         # Parse the accept-list once — we match every incoming datagram
         # against it inside the hot loop, so we want cheap
@@ -110,7 +110,7 @@ class TrapListener:
         while not self._stop.is_set():
             try:
                 data, addr = self._sock.recvfrom(65535)
-            except socket.timeout:
+            except TimeoutError:
                 continue
             except OSError:
                 break
@@ -129,7 +129,7 @@ class TrapListener:
                 except Exception:
                     log.exception("trap callback error")
 
-    def _parse(self, data: bytes, addr: tuple[str, int]) -> Optional[TrapEvent]:
+    def _parse(self, data: bytes, addr: tuple[str, int]) -> TrapEvent | None:
         """Decode an SNMP trap packet (v1 or v2c) into a TrapEvent."""
         # Peek version by trying v2c first (superset); if that fails fall back
         # to v1. Decoding a v2c SNMPv2TrapPDU (tag 7) with v1's Message spec

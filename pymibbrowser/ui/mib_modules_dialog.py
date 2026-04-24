@@ -10,21 +10,30 @@ Also supports Unload — deletes the compiled .json (and optional source).
 from __future__ import annotations
 
 import json
-from pathlib import Path
 
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QFont
 from PyQt6.QtWidgets import (
-    QCheckBox, QDialog, QDialogButtonBox, QFileDialog, QHeaderView,
-    QHBoxLayout, QLabel, QLineEdit, QMessageBox, QPushButton, QSplitter,
-    QTableWidget, QTableWidgetItem, QTabWidget, QTextBrowser, QVBoxLayout,
-    QWidget,
+    QCheckBox,
+    QDialog,
+    QDialogButtonBox,
+    QHBoxLayout,
+    QHeaderView,
+    QLabel,
+    QLineEdit,
+    QMessageBox,
+    QPushButton,
+    QSplitter,
+    QTableWidget,
+    QTableWidgetItem,
+    QTabWidget,
+    QTextBrowser,
+    QVBoxLayout,
 )
 
 from .. import config
 from ..i18n import _t
 from ..mib_loader import STUB_MIBS
-
 
 # Short blurbs for pysmi's built-in stub modules so clicking through to them
 # from "Imports from" actually shows something.

@@ -10,17 +10,15 @@ from __future__ import annotations
 
 import json
 import logging
-import os
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Iterable, Optional
 
-from pysmi import debug as _pysmi_debug
 from pysmi.codegen import JsonCodeGen
 from pysmi.compiler import MibCompiler
 from pysmi.parser import SmiV1CompatParser
 from pysmi.reader import FileReader, HttpReader
-from pysmi.searcher import StubSearcher, AnyFileSearcher
+from pysmi.searcher import AnyFileSearcher, StubSearcher
 from pysmi.writer import FileWriter
 
 from . import config
@@ -149,7 +147,7 @@ def compile_modules(module_names: list[str], extra_src_dirs: list[Path],
     """
     dest.mkdir(parents=True, exist_ok=True)
     from . import config
-    src_dirs = list(extra_src_dirs) + [config.default_mibs_src()]
+    src_dirs = [*list(extra_src_dirs), config.default_mibs_src()]
     compiler = _make_compiler(src_dirs, dest, use_network=use_network)
     return compiler.compile(*module_names, rebuild=True, genTexts=True,
                             ignoreErrors=True)
@@ -177,8 +175,8 @@ class MibNode:
     indices: list[str] = field(default_factory=list)        # index column names
     implied_last_index: bool = False        # last index has no length prefix
     enum_values: dict[int, str] = field(default_factory=dict)
-    children: list["MibNode"] = field(default_factory=list)
-    parent: Optional["MibNode"] = None
+    children: list[MibNode] = field(default_factory=list)
+    parent: MibNode | None = None
 
     @property
     def is_table(self) -> bool:
@@ -196,7 +194,7 @@ class MibNode:
     def is_column(self) -> bool:
         return self.node_role == "column"
 
-    def add_child(self, node: "MibNode") -> None:
+    def add_child(self, node: MibNode) -> None:
         node.parent = self
         self.children.append(node)
 
@@ -207,7 +205,7 @@ class MibNode:
 
     def path(self) -> str:
         parts: list[str] = []
-        n: Optional[MibNode] = self
+        n: MibNode | None = self
         while n is not None:
             parts.append(n.name)
             n = n.parent
@@ -311,7 +309,7 @@ class MibTree:
         return out
 
     def load_compiled(self, compiled_dir: Path,
-                      enabled: Optional[list[str]] = None) -> int:
+                      enabled: list[str] | None = None) -> int:
         """Load compiled MIB JSON files. If `enabled` is given (a list of
         module names), only those modules are merged into the tree — other
         files still exist on disk but don't populate the tree. None means
@@ -443,7 +441,7 @@ class MibTree:
         if leftover:
             log.debug("%s: %d defs unresolved", mod_name, len(leftover))
 
-    def _try_make_node(self, mod: str, name: str, body: dict) -> Optional[MibNode]:
+    def _try_make_node(self, mod: str, name: str, body: dict) -> MibNode | None:
         # Require an OID we can resolve. pysmi's JSON stores it as either
         # {"oid": "1.3.6.1.x"} (already resolved) or unresolved symbolic.
         oid_str = body.get("oid")
@@ -543,7 +541,7 @@ class MibTree:
 
     # Lookup API --------------------------------------------------------
 
-    def resolve_name(self, name_or_oid: str) -> Optional[tuple[int, ...]]:
+    def resolve_name(self, name_or_oid: str) -> tuple[int, ...] | None:
         """Resolve 'sysUpTime' or 'sysUpTime.0' or '1.3.6.1.2.1.1.3.0'."""
         s = name_or_oid.strip().lstrip(".")
         if not s:
@@ -560,7 +558,7 @@ class MibTree:
             return None
         return node.oid + suffix
 
-    def lookup_oid(self, oid: Iterable[int]) -> Optional[MibNode]:
+    def lookup_oid(self, oid: Iterable[int]) -> MibNode | None:
         """Nearest named ancestor for a numeric OID."""
         t = tuple(int(x) for x in oid)
         for i in range(len(t), 0, -1):
@@ -580,10 +578,10 @@ class MibTree:
         suffix = t[len(node.oid):]
         return node.name + "." + ".".join(str(p) for p in suffix)
 
-    def node_by_oid(self, oid: tuple[int, ...]) -> Optional[MibNode]:
+    def node_by_oid(self, oid: tuple[int, ...]) -> MibNode | None:
         return self._by_oid.get(oid)
 
-    def node_by_name(self, name: str) -> Optional[MibNode]:
+    def node_by_name(self, name: str) -> MibNode | None:
         return self._by_name.get(name)
 
 

@@ -13,19 +13,26 @@ so the resulting file drops straight into a mock-agent.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Optional
 
 from PyQt6.QtCore import QObject, QThread, pyqtSignal
 from PyQt6.QtGui import QFont
 from PyQt6.QtWidgets import (
-    QDialog, QDialogButtonBox, QFileDialog, QHBoxLayout, QLabel, QLineEdit,
-    QMessageBox, QPlainTextEdit, QProgressBar, QPushButton, QVBoxLayout,
+    QDialog,
+    QDialogButtonBox,
+    QFileDialog,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QMessageBox,
+    QPlainTextEdit,
+    QProgressBar,
+    QPushButton,
+    QVBoxLayout,
 )
 
+from .. import snmp_ops
 from ..config import Agent
 from ..i18n import _t
-from .. import snmp_ops
-
 
 # Mapping from VarBind.type_name → snmpwalk "<TYPE>" token. Anything not
 # explicitly named falls back to STRING (matches snmpwalk default).
@@ -57,7 +64,7 @@ def _escape_quoted(s: str) -> str:
     return s.replace('\\', '\\\\').replace('"', '\\"')
 
 
-def _format_line(vb) -> Optional[str]:
+def _format_line(vb) -> str | None:
     oid = "." + ".".join(str(x) for x in vb.oid)
     tok = _TYPE_TOKENS.get(vb.type_name, "STRING")
     # Terminator marker vbs (no value) — skip from output; they're not
@@ -111,8 +118,8 @@ class SaveWalkDialog(QDialog):
         self.resize(720, 520)
         self.agent = agent
         self.tree = tree
-        self._thread: Optional[QThread] = None
-        self._worker: Optional[_WalkWorker] = None
+        self._thread: QThread | None = None
+        self._worker: _WalkWorker | None = None
         self._result_lines: list[tuple[tuple[int, ...], str]] = []
 
         v = QVBoxLayout(self)
@@ -169,7 +176,7 @@ class SaveWalkDialog(QDialog):
         btns.addButton(close_b, QDialogButtonBox.ButtonRole.RejectRole)
         v.addWidget(btns)
 
-    def _resolve_oid(self, text: str) -> Optional[tuple[int, ...]]:
+    def _resolve_oid(self, text: str) -> tuple[int, ...] | None:
         text = text.strip()
         if not text:
             return None

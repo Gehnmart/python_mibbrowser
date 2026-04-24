@@ -4,23 +4,41 @@ from __future__ import annotations
 import csv
 import logging
 from pathlib import Path
-from typing import Optional
 
-from PyQt6.QtCore import QModelIndex, Qt, QSortFilterProxyModel, QTimer
-from PyQt6.QtGui import QAction, QKeySequence, QFont
+from PyQt6.QtCore import QModelIndex, QSortFilterProxyModel, Qt, QTimer
+from PyQt6.QtGui import QAction, QFont, QKeySequence
 from PyQt6.QtWidgets import (
-    QAbstractItemView, QApplication, QComboBox, QFileDialog, QHBoxLayout,
-    QHeaderView, QLabel, QLineEdit, QMainWindow, QMenu,
-    QMessageBox, QPlainTextEdit, QProgressBar, QPushButton, QSplitter,
-    QStatusBar, QTabWidget, QTableView, QTableWidget, QTableWidgetItem,
-    QTextBrowser, QToolBar, QTreeView, QVBoxLayout, QWidget,
+    QAbstractItemView,
+    QApplication,
+    QComboBox,
+    QFileDialog,
+    QHBoxLayout,
+    QHeaderView,
+    QLabel,
+    QLineEdit,
+    QMainWindow,
+    QMenu,
+    QMessageBox,
+    QPlainTextEdit,
+    QProgressBar,
+    QPushButton,
+    QSplitter,
+    QStatusBar,
+    QTableView,
+    QTableWidget,
+    QTableWidgetItem,
+    QTabWidget,
+    QToolBar,
+    QTreeView,
+    QVBoxLayout,
+    QWidget,
 )
 
 from .. import snmp_ops, workers
 from ..config import Agent, AppSettings
-from ..i18n import _t, set_language, current_language
+from ..i18n import _t, set_language
 from ..mib_loader import MibNode, MibTree
-from .mib_tree_model import MibTreeModel, FastMibFilterProxy
+from .mib_tree_model import FastMibFilterProxy, MibTreeModel
 from .result_table import ResultTableModel
 
 log = logging.getLogger(__name__)
@@ -52,7 +70,7 @@ class MibBrowserWindow(QMainWindow):
         self._settings_save_timer.timeout.connect(self.settings.save)
 
         # Expose components discovered by Tools windows (they reuse SNMP/MIB).
-        self.log_pane: Optional[QPlainTextEdit] = self.log_widget
+        self.log_pane: QPlainTextEdit | None = self.log_widget
 
     # ------------------------------------------------------------------
     # Central widget: MIB tree left | right-side stack with tabs
@@ -414,7 +432,7 @@ class MibBrowserWindow(QMainWindow):
         help_m.addSeparator()
         help_m.addAction(self._action(_t("About"), self._about))
 
-    def _action(self, text: str, cb, shortcut: Optional[str] = None) -> QAction:
+    def _action(self, text: str, cb, shortcut: str | None = None) -> QAction:
         a = QAction(text, self)
         a.triggered.connect(cb)
         if shortcut:
@@ -572,7 +590,7 @@ class MibBrowserWindow(QMainWindow):
         key = (ag.host, ag.port)
         existing = [a for a in self.settings.saved_agents
                     if (a.host, a.port) != key]
-        self.settings.saved_agents = [Agent(**vars(ag))] + existing[:19]
+        self.settings.saved_agents = [Agent(**vars(ag)), *existing[:19]]
         self._save_settings_soon()
         self._refresh_agent_combo()
 
@@ -726,7 +744,7 @@ class MibBrowserWindow(QMainWindow):
         """Ctrl+1..9 — switch the toolbar to the top-9 saved agents.
         Index follows the Manage-agents order. No-op if fewer than N
         agents saved."""
-        from PyQt6.QtGui import QShortcut, QKeySequence
+        from PyQt6.QtGui import QKeySequence, QShortcut
         for i in range(1, 10):
             sc = QShortcut(QKeySequence(f"Ctrl+{i}"), self)
             sc.activated.connect(lambda idx=i - 1: self._switch_saved_agent(idx))
@@ -763,7 +781,7 @@ class MibBrowserWindow(QMainWindow):
         if not oid_text:
             return
         existing = [o for o in self.settings.recent_oids if o != oid_text]
-        self.settings.recent_oids = [oid_text] + existing[:19]
+        self.settings.recent_oids = [oid_text, *existing[:19]]
         self._save_settings_soon()
 
     def _rebuild_oid_history_menu(self) -> None:
@@ -861,7 +879,7 @@ class MibBrowserWindow(QMainWindow):
         # Fall back to running the op against Result — better than silence.
         self._run_operation()
 
-    def _run_operation(self, op: Optional[str] = None) -> None:
+    def _run_operation(self, op: str | None = None) -> None:
         if isinstance(op, bool) or op is None:
             op = self.op_combo.currentText()
         oid_text = self.oid_edit.text().strip()
@@ -1121,7 +1139,7 @@ class MibBrowserWindow(QMainWindow):
         else:
             # Restore × button by re-enabling closable-ness per-tab (Qt only
             # exposes a global flag, so we just set the button back).
-            from PyQt6.QtWidgets import QToolButton, QStyle
+            from PyQt6.QtWidgets import QStyle, QToolButton
             btn = QToolButton()
             btn.setIcon(self.style().standardIcon(
                 QStyle.StandardPixmap.SP_TitleBarCloseButton))
@@ -1395,15 +1413,21 @@ class MibBrowserWindow(QMainWindow):
         ("Graph",       "graph", ""),
     )
 
-    def _show_bookmark_editor(self, seed: Optional[dict]) -> Optional[dict]:
+    def _show_bookmark_editor(self, seed: dict | None) -> dict | None:
         """Shared editor: pre-fill with `seed` (None = new from toolbar).
         Returns the saved dict or None on cancel.
 
         The dialog mirrors iReasoning's Bookmark OID: Name / OID / one
         Operation combo. 'Table View' and 'Graph' are just entries in
         that combo — simpler than the previous radio-vs-combo hybrid."""
-        from PyQt6.QtWidgets import (QDialog, QDialogButtonBox, QFormLayout,
-                                     QLineEdit, QVBoxLayout, QComboBox)
+        from PyQt6.QtWidgets import (
+            QComboBox,
+            QDialog,
+            QDialogButtonBox,
+            QFormLayout,
+            QLineEdit,
+            QVBoxLayout,
+        )
         if seed is None:
             oid = self.oid_edit.text().strip()
             if not oid:
@@ -1426,7 +1450,7 @@ class MibBrowserWindow(QMainWindow):
         seed_view = seed.get("view", "op")
         seed_op = seed.get("operation") or "Get"
         idx = 0
-        for i, (label, view, op) in enumerate(self._BOOKMARK_OPS):
+        for i, (_label, view, op) in enumerate(self._BOOKMARK_OPS):
             if view == seed_view and (view != "op" or op == seed_op):
                 idx = i
                 break
@@ -1513,8 +1537,14 @@ class MibBrowserWindow(QMainWindow):
 
     def _manage_polls(self) -> None:
         """Small list dialog: Edit / Run / Delete saved polls."""
-        from PyQt6.QtWidgets import (QDialog, QListWidget, QListWidgetItem,
-                                     QPushButton, QHBoxLayout, QVBoxLayout)
+        from PyQt6.QtWidgets import (
+            QDialog,
+            QHBoxLayout,
+            QListWidget,
+            QListWidgetItem,
+            QPushButton,
+            QVBoxLayout,
+        )
         d = QDialog(self); d.setWindowTitle(_t("Manage Polls"))
         d.resize(520, 380)
         v = QVBoxLayout(d)
@@ -1618,8 +1648,8 @@ class MibBrowserWindow(QMainWindow):
 
     def _add_to_watches(self, n) -> None:
         """Entrance point from tree / result-row context menu."""
-        from .watches_tab import AddWatchDialog
         from ..config import WatchDefinition
+        from .watches_tab import AddWatchDialog
         seed = WatchDefinition(
             name=n.name,
             oid="." + ".".join(str(x) for x in n.oid),
@@ -1638,9 +1668,15 @@ class MibBrowserWindow(QMainWindow):
         Operation columns with Edit / Delete / Go / Close buttons on
         the right. Double-click / Enter = Edit; Go fires the bookmark
         without leaving the dialog."""
-        from PyQt6.QtWidgets import (QDialog, QTableWidget, QTableWidgetItem,
-                                     QPushButton, QHBoxLayout, QVBoxLayout,
-                                     QAbstractItemView)
+        from PyQt6.QtWidgets import (
+            QAbstractItemView,
+            QDialog,
+            QHBoxLayout,
+            QPushButton,
+            QTableWidget,
+            QTableWidgetItem,
+            QVBoxLayout,
+        )
         d = QDialog(self); d.setWindowTitle(_t("Manage Bookmarks"))
         d.resize(640, 420)
         h = QHBoxLayout(d)
@@ -1791,9 +1827,10 @@ class MibBrowserWindow(QMainWindow):
     def _open_log_file(self) -> None:
         """Reveal the log file — prefer xdg-open for user's tail viewer,
         fall back to built-in read-only text viewer."""
-        from .. import config
         from PyQt6.QtCore import QUrl
         from PyQt6.QtGui import QDesktopServices
+
+        from .. import config
         path = config.log_file()
         if not path.exists():
             QMessageBox.information(self, _t("Open log file…"),
@@ -1801,7 +1838,7 @@ class MibBrowserWindow(QMainWindow):
             return
         if not QDesktopServices.openUrl(QUrl.fromLocalFile(str(path))):
             # Fallback: show last 500 lines inline.
-            from PyQt6.QtWidgets import QDialog, QVBoxLayout, QPlainTextEdit
+            from PyQt6.QtWidgets import QDialog, QPlainTextEdit, QVBoxLayout
             dlg = QDialog(self); dlg.setWindowTitle(str(path))
             dlg.resize(900, 600)
             layout = QVBoxLayout(dlg)
@@ -1841,6 +1878,7 @@ class MibBrowserWindow(QMainWindow):
         """Full MIB-cache rebuild, determinate progress per-module."""
         from PyQt6.QtCore import QObject, QThread, pyqtSignal
         from PyQt6.QtWidgets import QCheckBox, QDialog, QDialogButtonBox, QVBoxLayout
+
         from .. import mib_loader
 
         # Tiny modal: confirm + offer network fallback. Local-only by default.
@@ -1900,8 +1938,8 @@ class MibBrowserWindow(QMainWindow):
             # We know how many modules were in mibs-src/ (we iterate them).
             # pysmi may have pulled in additional transitive deps — count
             # them separately so the user isn't confused.
-            from .. import mib_loader as _ml
             from .. import config as _cfg
+            from .. import mib_loader as _ml
             src_modules = set(
                 _ml._discover_modules([_cfg.default_mibs_src()]))
             total_loaded = len(new_tree.modules)

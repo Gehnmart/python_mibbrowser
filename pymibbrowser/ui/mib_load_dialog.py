@@ -8,17 +8,24 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PyQt6.QtCore import QObject, Qt, QThread, pyqtSignal
+from PyQt6.QtCore import QObject, QThread, pyqtSignal
 from PyQt6.QtGui import QColor, QFont
 from PyQt6.QtWidgets import (
-    QCheckBox, QDialog, QDialogButtonBox, QFileDialog, QHBoxLayout, QHeaderView,
-    QLabel, QMessageBox, QPushButton, QTableWidget, QTableWidgetItem,
+    QCheckBox,
+    QDialog,
+    QDialogButtonBox,
+    QFileDialog,
+    QHBoxLayout,
+    QHeaderView,
+    QLabel,
+    QMessageBox,
+    QPushButton,
+    QTableWidget,
+    QTableWidgetItem,
     QVBoxLayout,
 )
 
-from .. import config, mib_loader
 from ..i18n import _t
-
 
 STATUS_COLORS = {
     "compiled":    QColor("#6f6"),
@@ -46,9 +53,9 @@ class _CompileWorker(QObject):
         try:
             # compile_modules uses one big .compile(*mods) call which doesn't
             # emit per-module progress. Loop ourselves so we can report.
-            from pymibbrowser import mib_loader, config
+            from pymibbrowser import config, mib_loader
             dest = config.compiled_mibs_dir()
-            src_dirs = list(self._extra) + [config.default_mibs_src()]
+            src_dirs = [*list(self._extra), config.default_mibs_src()]
             compiler = mib_loader._make_compiler(
                 src_dirs, dest, use_network=self._network)
             merged: dict = {}

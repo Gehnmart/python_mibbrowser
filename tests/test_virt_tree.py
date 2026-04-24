@@ -9,7 +9,7 @@ compilation. The invariant we care about:
 from __future__ import annotations
 
 from pymibbrowser.mib_loader import MibNode
-from pymibbrowser.ui.mib_tree_model import build_virt_tree, _is_folder
+from pymibbrowser.ui.mib_tree_model import _is_folder, build_virt_tree
 
 
 def _n(name, oid, **kw):
@@ -39,7 +39,7 @@ def test_chain_of_folders_collapses():
     e = _n("e", (1, 3, 6, 2), syntax="Integer", access="read-only")
     a.add_child(b); b.add_child(c); c.add_child(d); c.add_child(e)
 
-    phantom, oid_map = build_virt_tree(a)
+    phantom, _oid_map = build_virt_tree(a)
     # phantom has one visible top: the collapsed "a.b.c"
     assert len(phantom.children) == 1
     top = phantom.children[0]

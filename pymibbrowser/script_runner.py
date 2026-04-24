@@ -7,8 +7,8 @@ from __future__ import annotations
 
 import re
 import time
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable, Optional
 
 from . import snmp_ops
 from .config import Agent
@@ -27,7 +27,7 @@ def _parse_host(spec: str, default_port: int) -> tuple[str, int]:
 
 
 def run(path: str, agent: Agent, tree: MibTree,
-        logger: Optional[Callable[[str], None]] = None) -> None:
+        logger: Callable[[str], None] | None = None) -> None:
     def log(msg: str) -> None:
         if logger is not None:
             logger(msg)
@@ -36,7 +36,7 @@ def run(path: str, agent: Agent, tree: MibTree,
 
     last_result = None
     last_error = 0
-    save_path: Optional[Path] = None
+    save_path: Path | None = None
     save_buffer: list[str] = []
 
     def _save_line(s: str) -> None:

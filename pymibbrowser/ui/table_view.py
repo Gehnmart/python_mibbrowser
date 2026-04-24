@@ -3,20 +3,26 @@ cols = columns of the MIB table)."""
 from __future__ import annotations
 
 import csv
-from typing import Optional
 
 from PyQt6.QtCore import QAbstractTableModel, QModelIndex, Qt, QTimer
 from PyQt6.QtGui import QColor, QFont
 from PyQt6.QtWidgets import (
-    QFileDialog, QHBoxLayout, QHeaderView, QInputDialog, QLabel, QLineEdit,
-    QMessageBox, QPushButton, QSpinBox, QTableView, QToolBar, QVBoxLayout,
+    QFileDialog,
+    QHeaderView,
+    QLabel,
+    QMessageBox,
+    QPushButton,
+    QSpinBox,
+    QTableView,
+    QToolBar,
+    QVBoxLayout,
     QWidget,
 )
 
-from ..i18n import _t
 from .. import snmp_ops, workers
 from ..config import Agent
-from ..mib_loader import MibNode, MibTree
+from ..i18n import _t
+from ..mib_loader import MibTree
 
 
 class TableDataModel(QAbstractTableModel):
@@ -30,7 +36,7 @@ class TableDataModel(QAbstractTableModel):
 
     def __init__(self, column_names: list[str]) -> None:
         super().__init__()
-        self._columns = list(column_names) + [self.INDEX_VALUE_LABEL]
+        self._columns = [*list(column_names), self.INDEX_VALUE_LABEL]
         self._rows: list[list[str]] = []
         self._row_index: list[str] = []     # suffix of OID, e.g. "1.2"
         self._rotated = False
@@ -322,7 +328,7 @@ class TableViewTab(QWidget):
         """
         out: dict[str, str] = {}
         remaining = list(suffix)
-        last_addr_type: Optional[int] = None  # IPv4 vs IPv6 from InetAddressType
+        last_addr_type: int | None = None  # IPv4 vs IPv6 from InetAddressType
 
         total = len(index_names)
         for pos, name in enumerate(index_names):
@@ -397,21 +403,21 @@ class TableViewTab(QWidget):
     @staticmethod
     def _render_octet_index(name: str, syntax: str,
                             raw: list[int],
-                            addr_type: Optional[int]) -> str:
+                            addr_type: int | None) -> str:
         # InetAddress disambiguation: type 1=ipv4, 2=ipv6, 3=ipv4z, 4=ipv6z,
         # 16=dns. Use addr_type carried from preceding InetAddressType index.
         if "inetaddress" in syntax:
             if addr_type in (1, 3) and len(raw) >= 4:
                 return ".".join(str(b) for b in raw[:4])
             if addr_type in (2, 4) and len(raw) >= 16:
-                hexes = ["%02x%02x" % (raw[i], raw[i + 1])
+                hexes = [f"{raw[i]:02x}{raw[i + 1]:02x}"
                          for i in range(0, 16, 2)]
                 return ":".join(hexes)
             # Fallback by length alone
             if len(raw) == 4:
                 return ".".join(str(b) for b in raw)
             if len(raw) == 16:
-                hexes = ["%02x%02x" % (raw[i], raw[i + 1])
+                hexes = [f"{raw[i]:02x}{raw[i + 1]:02x}"
                          for i in range(0, 16, 2)]
                 return ":".join(hexes)
         if "physaddress" in syntax or "mac" in syntax:
@@ -429,7 +435,7 @@ class TableViewTab(QWidget):
             return
         with open(path, "w", newline="") as f:
             w = csv.writer(f)
-            w.writerow([""] + self.model._columns)
+            w.writerow(["", *self.model._columns])
             for r, row in enumerate(self.model._rows):
                 w.writerow([self.model._row_index[r] if r < len(self.model._row_index) else "", *row])
 

@@ -13,18 +13,28 @@ Layout:
 """
 from __future__ import annotations
 
-from typing import Optional
-
 from PyQt6.QtWidgets import (
-    QAbstractItemView, QComboBox, QDialog, QDialogButtonBox, QFormLayout,
-    QHBoxLayout, QInputDialog, QLabel, QLineEdit, QListWidget, QListWidgetItem,
-    QMessageBox, QPushButton, QSpinBox, QTableWidget, QTableWidgetItem,
+    QAbstractItemView,
+    QComboBox,
+    QDialog,
+    QDialogButtonBox,
+    QFormLayout,
+    QHBoxLayout,
+    QInputDialog,
+    QLabel,
+    QLineEdit,
+    QListWidget,
+    QListWidgetItem,
+    QMessageBox,
+    QPushButton,
+    QSpinBox,
+    QTableWidget,
+    QTableWidgetItem,
     QVBoxLayout,
 )
 
 from ..config import Agent, AppSettings, PollDefinition, PollVariable
 from ..i18n import _t
-
 
 OP_CHOICES = ("Get", "Get Next")
 
@@ -87,7 +97,7 @@ class VariableDialog(QDialog):
 class PollDialog(QDialog):
     """Create Poll / Edit Poll — fills a PollDefinition."""
 
-    def __init__(self, seed: Optional[PollDefinition], settings: AppSettings,
+    def __init__(self, seed: PollDefinition | None, settings: AppSettings,
                  tree=None, parent=None) -> None:
         super().__init__(parent)
         self.setWindowTitle(_t("Create Poll") if seed is None
