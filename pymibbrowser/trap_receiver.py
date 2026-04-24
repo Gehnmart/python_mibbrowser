@@ -32,17 +32,43 @@ class TrapEvent:
     message: str = ""          # description via rules
     var_binds: list[tuple[str, str, str]] = field(default_factory=list)
     # ^ (oid, type, value-as-string)
+    raw_bytes: bytes = b""        # original UDP payload — for hex dump
 
 
 class TrapListener:
     """Threaded UDP listener on a given port."""
     def __init__(self, port: int = 162,
-                 on_trap: Optional[Callable[[TrapEvent], None]] = None) -> None:
+                 on_trap: Optional[Callable[[TrapEvent], None]] = None,
+                 accept_from: str = "") -> None:
         self.port = port
         self._on_trap = on_trap
         self._sock: Optional[socket.socket] = None
         self._thread: Optional[threading.Thread] = None
         self._stop = threading.Event()
+        # Parse the accept-list once — we match every incoming datagram
+        # against it inside the hot loop, so we want cheap
+        # ipaddress.IPv4Network objects, not strings.
+        self._accept_nets: list = []
+        for token in (accept_from or "").split(","):
+            t = token.strip()
+            if not t:
+                continue
+            try:
+                import ipaddress
+                self._accept_nets.append(
+                    ipaddress.ip_network(t, strict=False))
+            except ValueError:
+                log.warning("trap accept_from: ignoring invalid %r", t)
+
+    def _allowed(self, ip: str) -> bool:
+        if not self._accept_nets:
+            return True
+        try:
+            import ipaddress
+            addr = ipaddress.ip_address(ip)
+        except ValueError:
+            return False
+        return any(addr in net for net in self._accept_nets)
 
     def start(self) -> None:
         if self._thread and self._thread.is_alive():
@@ -88,6 +114,10 @@ class TrapListener:
                 continue
             except OSError:
                 break
+            if not self._allowed(addr[0]):
+                # Dropped before parse — no CPU burn on spoofed/unsolicited
+                # datagrams.
+                continue
             try:
                 ev = self._parse(data, addr)
             except Exception as exc:
@@ -121,6 +151,7 @@ class TrapListener:
             version="1" if version_int == 0 else "2c",
             community=community,
             trap_oid="",
+            raw_bytes=data,
         )
 
         if version_int == 0:

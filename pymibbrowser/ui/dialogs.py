@@ -8,6 +8,7 @@ from PyQt6.QtWidgets import (
     QSpinBox, QTabWidget, QVBoxLayout, QWidget, QDoubleSpinBox, QPlainTextEdit,
 )
 
+from ..i18n import _t
 from ..config import Agent
 from ..mib_loader import MibNode
 
@@ -19,7 +20,7 @@ class AgentDialog(QDialog):
 
     def __init__(self, agent: Agent, parent=None) -> None:
         super().__init__(parent)
-        self.setWindowTitle("Agent properties")
+        self.setWindowTitle(_t("Agent properties"))
         self.agent = Agent(**vars(agent))        # copy
 
         tabs = QTabWidget(self)
@@ -37,16 +38,16 @@ class AgentDialog(QDialog):
         self.maxrep_edit = QSpinBox(); self.maxrep_edit.setRange(1, 200); self.maxrep_edit.setValue(self.agent.max_repetitions)
         self.nonrep_edit = QSpinBox(); self.nonrep_edit.setRange(0, 50); self.nonrep_edit.setValue(self.agent.non_repeaters)
 
-        gl.addRow("Host", self.host_edit)
-        gl.addRow("Port", self.port_edit)
-        gl.addRow("Version", self.ver_combo)
-        gl.addRow("Timeout (s)", self.timeout_edit)
-        gl.addRow("Retries", self.retries_edit)
-        gl.addRow("Read community", self.rcomm_edit)
-        gl.addRow("Write community", self.wcomm_edit)
-        gl.addRow("Max repetitions (bulk)", self.maxrep_edit)
-        gl.addRow("Non repeaters (bulk)", self.nonrep_edit)
-        tabs.addTab(g, "General")
+        gl.addRow(_t("Host"), self.host_edit)
+        gl.addRow(_t("Port"), self.port_edit)
+        gl.addRow(_t("Version"), self.ver_combo)
+        gl.addRow(_t("Timeout (s)"), self.timeout_edit)
+        gl.addRow(_t("Retries"), self.retries_edit)
+        gl.addRow(_t("Read community"), self.rcomm_edit)
+        gl.addRow(_t("Write community"), self.wcomm_edit)
+        gl.addRow(_t("Max repetitions (bulk)"), self.maxrep_edit)
+        gl.addRow(_t("Non repeaters (bulk)"), self.nonrep_edit)
+        tabs.addTab(g, _t("General"))
 
         # v3 tab — passthrough only
         v3 = QWidget()
@@ -58,12 +59,12 @@ class AgentDialog(QDialog):
         self.priv_proto = QComboBox(); self.priv_proto.addItems(("none","des","3des","aes","aes128","aes192","aes256"))
         self.priv_proto.setCurrentText(self.agent.priv_protocol)
         self.priv_pass = QLineEdit(self.agent.priv_password); self.priv_pass.setEchoMode(QLineEdit.EchoMode.Password)
-        vl.addRow("User", self.user_edit)
-        vl.addRow("Auth proto", self.auth_proto)
-        vl.addRow("Auth password", self.auth_pass)
-        vl.addRow("Priv proto", self.priv_proto)
-        vl.addRow("Priv password", self.priv_pass)
-        tabs.addTab(v3, "SNMPv3 (passthrough)")
+        vl.addRow(_t("User"), self.user_edit)
+        vl.addRow(_t("Auth proto"), self.auth_proto)
+        vl.addRow(_t("Auth password"), self.auth_pass)
+        vl.addRow(_t("Priv proto"), self.priv_proto)
+        vl.addRow(_t("Priv password"), self.priv_pass)
+        tabs.addTab(v3, _t("SNMPv3 (passthrough)"))
 
         layout = QVBoxLayout(self)
         layout.addWidget(tabs)
@@ -124,8 +125,8 @@ class SetDialog(QDialog):
 
         self.value_edit = QLineEdit()
         form.addRow(QLabel(oid_text))
-        form.addRow("Type", self.type_combo)
-        form.addRow("Value", self.value_edit)
+        form.addRow(_t("Type"), self.type_combo)
+        form.addRow(_t("Value"), self.value_edit)
 
         btns = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok |
                                 QDialogButtonBox.StandardButton.Cancel)

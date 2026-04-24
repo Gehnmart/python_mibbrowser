@@ -18,6 +18,7 @@ from PyQt6.QtWidgets import (
     QSpinBox, QSplitter, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget,
 )
 
+from ..i18n import _t
 from .. import config, trap_sender
 from ..config import Agent
 from ..mib_loader import MibTree
@@ -32,7 +33,7 @@ from ..trap_receiver import TrapListener, TrapEvent
 class TrapSenderDialog(QDialog):
     def __init__(self, tree: MibTree, agent: Agent, parent=None) -> None:
         super().__init__(parent)
-        self.setWindowTitle("Trap Sender")
+        self.setWindowTitle(_t("Trap Sender"))
         self.tree = tree
         self.agent = agent
         self.resize(620, 420)
@@ -43,29 +44,29 @@ class TrapSenderDialog(QDialog):
         self.comm_e = QLineEdit(agent.read_community)
         self.ver_c  = QComboBox(); self.ver_c.addItems(("1", "2c")); self.ver_c.setCurrentText("2c")
         self.trap_oid_e = QLineEdit(".1.3.6.1.6.3.1.1.5.1")   # coldStart default
-        form.addRow("Receiver host", self.host_e)
-        form.addRow("Port", self.port_e)
-        form.addRow("Community", self.comm_e)
-        form.addRow("Version", self.ver_c)
-        form.addRow("Trap OID", self.trap_oid_e)
+        form.addRow(_t("Receiver host"), self.host_e)
+        form.addRow(_t("Port"), self.port_e)
+        form.addRow(_t("Community"), self.comm_e)
+        form.addRow(_t("Version"), self.ver_c)
+        form.addRow(_t("Trap OID"), self.trap_oid_e)
 
         self.vbs_table = QTableWidget(0, 3)
         self.vbs_table.setHorizontalHeaderLabels(("OID/name", "Type", "Value"))
         self.vbs_table.horizontalHeader().setStretchLastSection(True)
 
-        add_btn = QPushButton("+ Add var-bind"); add_btn.clicked.connect(self._add_row)
-        del_btn = QPushButton("− Remove"); del_btn.clicked.connect(self._del_row)
+        add_btn = QPushButton(_t("+ Add var-bind")); add_btn.clicked.connect(self._add_row)
+        del_btn = QPushButton(_t("− Remove")); del_btn.clicked.connect(self._del_row)
         hb = QHBoxLayout(); hb.addWidget(add_btn); hb.addWidget(del_btn); hb.addStretch()
 
-        send_btn = QPushButton("Send trap"); send_btn.clicked.connect(self._send)
-        close_btn = QPushButton("Close"); close_btn.clicked.connect(self.accept)
+        send_btn = QPushButton(_t("Send trap")); send_btn.clicked.connect(self._send)
+        close_btn = QPushButton(_t("Close")); close_btn.clicked.connect(self.accept)
         footer = QHBoxLayout()
-        self.status = QLabel(" ")
+        self.status = QLabel(_t(" "))
         footer.addWidget(self.status, 1); footer.addWidget(send_btn); footer.addWidget(close_btn)
 
         v = QVBoxLayout(self)
         v.addLayout(form)
-        v.addWidget(QLabel("Variable bindings:"))
+        v.addWidget(QLabel(_t("Variable bindings:")))
         v.addWidget(self.vbs_table, 1)
         v.addLayout(hb)
         v.addLayout(footer)
@@ -129,28 +130,31 @@ class TrapSenderDialog(QDialog):
 class AgentSimulatorDialog(QDialog):
     def __init__(self, tree: MibTree, parent=None) -> None:
         super().__init__(parent)
-        self.setWindowTitle("SNMP Agent Simulator")
+        self.setWindowTitle(_t("SNMP Agent Simulator"))
         self.resize(600, 420)
         self.sim = SnmpAgentSim()
 
         v = QVBoxLayout(self)
         form = QFormLayout()
+        self.bind_e = QLineEdit("127.0.0.1")
+        self.bind_e.setToolTip(_t("0.0.0.0 to listen on all interfaces"))
         self.port_e = QSpinBox(); self.port_e.setRange(1, 65535); self.port_e.setValue(1161)
         self.comm_e = QLineEdit("public")
         self.walk_e = QLineEdit(); self.walk_e.setPlaceholderText(
             "path to snmpwalk file (optional)")
-        browse = QPushButton("Browse…"); browse.clicked.connect(self._browse)
+        browse = QPushButton(_t("Browse…")); browse.clicked.connect(self._browse)
         wh = QHBoxLayout(); wh.addWidget(self.walk_e, 1); wh.addWidget(browse)
-        form.addRow("Port", self.port_e)
-        form.addRow("Community", self.comm_e)
-        form.addRow("Walk file", wh)
+        form.addRow(_t("Bind host"), self.bind_e)
+        form.addRow(_t("Port"), self.port_e)
+        form.addRow(_t("Community"), self.comm_e)
+        form.addRow(_t("Walk file"), wh)
         v.addLayout(form)
 
         hb = QHBoxLayout()
-        self.start_btn = QPushButton("Start"); self.start_btn.clicked.connect(self._start)
-        self.stop_btn  = QPushButton("Stop");  self.stop_btn.clicked.connect(self._stop)
+        self.start_btn = QPushButton(_t("Start")); self.start_btn.clicked.connect(self._start)
+        self.stop_btn  = QPushButton(_t("Stop"));  self.stop_btn.clicked.connect(self._stop)
         self.stop_btn.setEnabled(False)
-        self.status = QLabel("stopped")
+        self.status = QLabel(_t("stopped"))
         hb.addWidget(self.start_btn); hb.addWidget(self.stop_btn); hb.addWidget(self.status, 1)
         v.addLayout(hb)
 
@@ -175,14 +179,15 @@ class AgentSimulatorDialog(QDialog):
             except Exception as exc:
                 QMessageBox.warning(self, "Simulator", f"Load failed: {exc}")
                 return
+        bind = self.bind_e.text().strip() or "127.0.0.1"
         try:
-            self.sim.start()
+            self.sim.start(bind)
         except OSError as exc:
             QMessageBox.warning(self, "Simulator", f"Cannot bind: {exc}")
             return
         self.start_btn.setEnabled(False)
         self.stop_btn.setEnabled(True)
-        self.status.setText(f"listening 127.0.0.1:{self.sim.port} "
+        self.status.setText(f"listening {bind}:{self.sim.port} "
                             f"({len(self.sim._data)} OIDs)")
 
     def _stop(self) -> None:
@@ -202,16 +207,16 @@ class AgentSimulatorDialog(QDialog):
 class MibEditorDialog(QDialog):
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
-        self.setWindowTitle("MIB Editor")
+        self.setWindowTitle(_t("MIB Editor"))
         self.resize(820, 560)
         self._current_path: Path | None = None
 
         v = QVBoxLayout(self)
         hb = QHBoxLayout()
-        open_b = QPushButton("Open…"); open_b.clicked.connect(self._open)
-        save_b = QPushButton("Save"); save_b.clicked.connect(self._save)
-        saveas_b = QPushButton("Save as…"); saveas_b.clicked.connect(self._save_as)
-        check_b = QPushButton("Parse check"); check_b.clicked.connect(self._check)
+        open_b = QPushButton(_t("Open…")); open_b.clicked.connect(self._open)
+        save_b = QPushButton(_t("Save")); save_b.clicked.connect(self._save)
+        saveas_b = QPushButton(_t("Save as…")); saveas_b.clicked.connect(self._save_as)
+        check_b = QPushButton(_t("Parse check")); check_b.clicked.connect(self._check)
         hb.addWidget(open_b); hb.addWidget(save_b); hb.addWidget(saveas_b); hb.addStretch()
         hb.addWidget(check_b)
         v.addLayout(hb)
@@ -301,7 +306,7 @@ class _LogBridge(QObject):
 class TrapdConsoleDialog(QDialog):
     def __init__(self, tree: MibTree, settings, parent=None) -> None:
         super().__init__(parent)
-        self.setWindowTitle("Trapd console")
+        self.setWindowTitle(_t("Trap daemon log"))
         self.resize(780, 420)
         self.tree = tree
         self.settings = settings
@@ -310,13 +315,13 @@ class TrapdConsoleDialog(QDialog):
 
         v = QVBoxLayout(self)
         hb = QHBoxLayout()
-        hb.addWidget(QLabel("Port:"))
+        hb.addWidget(QLabel(_t("Port:")))
         self.port_e = QSpinBox(); self.port_e.setRange(1, 65535); self.port_e.setValue(settings.trap_port)
         hb.addWidget(self.port_e)
-        self.start_b = QPushButton("Start"); self.start_b.clicked.connect(self._start); hb.addWidget(self.start_b)
-        self.stop_b  = QPushButton("Stop");  self.stop_b.clicked.connect(self._stop);  hb.addWidget(self.stop_b)
+        self.start_b = QPushButton(_t("Start")); self.start_b.clicked.connect(self._start); hb.addWidget(self.start_b)
+        self.stop_b  = QPushButton(_t("Stop"));  self.stop_b.clicked.connect(self._stop);  hb.addWidget(self.stop_b)
         self.stop_b.setEnabled(False)
-        clear_b = QPushButton("Clear"); clear_b.clicked.connect(lambda: self.log.clear()); hb.addWidget(clear_b)
+        clear_b = QPushButton(_t("Clear")); clear_b.clicked.connect(lambda: self.log.clear()); hb.addWidget(clear_b)
         hb.addStretch()
         v.addLayout(hb)
 

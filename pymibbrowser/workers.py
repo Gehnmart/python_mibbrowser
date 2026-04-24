@@ -67,3 +67,26 @@ def run_op(parent: QObject, fn: Callable[..., Any],
     thread.finished.connect(thread.deleteLater)
     thread.start()
     return thread, worker
+
+
+def prune_threads(pool: list) -> None:
+    """Drop refs to QThread objects that have already finished.
+
+    Callers keep a list so GC doesn't collect the thread while it's
+    still running; but once a thread is done, pinning a reference to
+    its now-`deleteLater()`-ed skeleton just leaks memory and makes
+    closeEvent's wait-loop iterate over stale entries. Call this at
+    the top of any periodic refresh that spawns workers."""
+    from PyQt6.sip import isdeleted
+    alive = []
+    for t in pool:
+        try:
+            if isdeleted(t):
+                continue
+            if not t.isRunning():
+                continue
+            alive.append(t)
+        except RuntimeError:
+            # Qt already destroyed the underlying C++ object.
+            continue
+    pool[:] = alive

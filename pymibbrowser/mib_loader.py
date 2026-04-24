@@ -270,6 +270,46 @@ class MibTree:
             self._by_oid[oid] = node
             self._by_name[name] = node
 
+    @staticmethod
+    def is_enterprise_module(data: dict) -> bool:
+        """A compiled module is 'enterprise-only' if every object it
+        contributes lives under .1.3.6.1.4.1 (enterprises). Used to hide
+        vendor MIBs by default — the user can opt them in via File →
+        MIB Modules."""
+        ENT_PREFIX = "1.3.6.1.4.1."
+        any_oid = False
+        for body in data.values():
+            if not isinstance(body, dict):
+                continue
+            oid = body.get("oid")
+            if not oid:
+                continue
+            any_oid = True
+            # Anchored at exactly .1.3.6.1.4.1.N — the leading dot is
+            # stripped in pysmi's JSON output, hence plain prefix check.
+            if not oid.startswith(ENT_PREFIX):
+                return False
+        # Modules with zero OIDs (e.g. pure textual-convention collections)
+        # aren't enterprise — don't hide them.
+        return any_oid
+
+    @staticmethod
+    def default_enabled_modules(compiled_dir: Path) -> list[str]:
+        """Return the module names to load by default — everything
+        EXCEPT enterprise-only MIBs. New installs and users who never
+        touched MIB Modules see a clean tree without vendor noise."""
+        compiled_dir = Path(compiled_dir)
+        out: list[str] = []
+        for jp in sorted(compiled_dir.glob("*.json")):
+            try:
+                data = json.loads(jp.read_text())
+            except Exception:
+                continue
+            if MibTree.is_enterprise_module(data):
+                continue
+            out.append(jp.stem)
+        return out
+
     def load_compiled(self, compiled_dir: Path,
                       enabled: Optional[list[str]] = None) -> int:
         """Load compiled MIB JSON files. If `enabled` is given (a list of

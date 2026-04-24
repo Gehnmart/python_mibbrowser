@@ -13,6 +13,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+from ..i18n import _t
 from .. import snmp_ops, workers
 from ..config import Agent
 from ..mib_loader import MibNode, MibTree
@@ -151,11 +152,11 @@ class TableViewTab(QWidget):
 
         tb = QToolBar()
         v.addWidget(tb)
-        refresh_b = QPushButton("Refresh"); refresh_b.clicked.connect(self._refresh); tb.addWidget(refresh_b)
-        rotate_b  = QPushButton("Rotate");  rotate_b.clicked.connect(self._rotate);   tb.addWidget(rotate_b)
-        export_b  = QPushButton("Export CSV"); export_b.clicked.connect(self._export); tb.addWidget(export_b)
+        refresh_b = QPushButton(_t("Refresh")); refresh_b.clicked.connect(self._refresh); tb.addWidget(refresh_b)
+        rotate_b  = QPushButton(_t("Rotate"));  rotate_b.clicked.connect(self._rotate);   tb.addWidget(rotate_b)
+        export_b  = QPushButton(_t("Export CSV")); export_b.clicked.connect(self._export); tb.addWidget(export_b)
         tb.addSeparator()
-        tb.addWidget(QLabel(" Poll (s): "))
+        tb.addWidget(QLabel(_t(" Poll (s): ")))
         self.poll_spin = QSpinBox(); self.poll_spin.setRange(0, 3600); self.poll_spin.setValue(0)
         self.poll_spin.valueChanged.connect(self._poll_changed)
         tb.addWidget(self.poll_spin)
@@ -175,7 +176,7 @@ class TableViewTab(QWidget):
         self.view.horizontalHeader().setStretchLastSection(True)
         v.addWidget(self.view, 1)
 
-        self.status_label = QLabel("—")
+        self.status_label = QLabel(_t("—"))
         v.addWidget(self.status_label)
 
     def _poll_changed(self, secs: int) -> None:
@@ -188,6 +189,7 @@ class TableViewTab(QWidget):
         self.model.rotate()
 
     def _refresh(self) -> None:
+        workers.prune_threads(self._active_threads)
         node = self.entry if self.entry else None
         root_oid = node.oid if node else self.oid
         oid_text = "." + ".".join(str(p) for p in root_oid)

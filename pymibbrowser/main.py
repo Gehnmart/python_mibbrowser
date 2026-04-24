@@ -42,11 +42,14 @@ def _setup_logging() -> None:
 
 
 def main() -> int:
+    # Settings must be loaded first so the log-dir override is honored
+    # by the file handler we create in _setup_logging().
+    settings = config.AppSettings.load()
+    config.set_log_dir_override(settings.log_dir or None)
     _setup_logging()
     app = QApplication(sys.argv)
     app.setApplicationName("pymibbrowser")
 
-    settings = config.AppSettings.load()
     # Settings take precedence over $LANG; empty string falls through to
     # locale auto-detect.
     i18n.init_language(settings.language or None)
@@ -68,6 +71,13 @@ def main() -> int:
         dlg.close()
 
     tree = mib_loader.MibTree()
+    # First-run default: hide vendor/enterprise MIBs. They're compiled and
+    # present on disk — just not merged into the tree until the user opts
+    # into them from File → MIB Modules. Persist the resolved list so the
+    # modules dialog can show check-state that matches reality.
+    if settings.enabled_mibs is None:
+        settings.enabled_mibs = mib_loader.MibTree.default_enabled_modules(compiled)
+        settings.save()
     tree.load_compiled(compiled, enabled=settings.enabled_mibs)
 
     # Import late so the Qt app exists first.

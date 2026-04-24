@@ -17,7 +17,8 @@ from PyQt6.QtGui import QFont
 from PyQt6.QtWidgets import (
     QCheckBox, QDialog, QDialogButtonBox, QFileDialog, QHeaderView,
     QHBoxLayout, QLabel, QLineEdit, QMessageBox, QPushButton, QSplitter,
-    QTableWidget, QTableWidgetItem, QTextBrowser, QVBoxLayout,
+    QTableWidget, QTableWidgetItem, QTabWidget, QTextBrowser, QVBoxLayout,
+    QWidget,
 )
 
 from .. import config
@@ -89,7 +90,9 @@ class MibModulesDialog(QDialog):
         self.filter_edit.textChanged.connect(self._apply_filter)
         v.addWidget(self.filter_edit)
 
-        split = QSplitter(Qt.Orientation.Vertical)
+        # Horizontal layout matches iReasoning: module list on the left,
+        # tabbed detail on the right.
+        split = QSplitter(Qt.Orientation.Horizontal)
 
         self.tbl = QTableWidget(0, 3)
         self.tbl.setHorizontalHeaderLabels(
@@ -107,11 +110,22 @@ class MibModulesDialog(QDialog):
         self.tbl.itemSelectionChanged.connect(self._on_select)
         split.addWidget(self.tbl)
 
-        self.info = QTextBrowser()
-        self.info.setOpenExternalLinks(False)
-        self.info.anchorClicked.connect(self._on_anchor)
-        split.addWidget(self.info)
-        split.setSizes([420, 220])
+        # Tabbed detail: General / Revisions / Imports (iReasoning layout).
+        self.tabs = QTabWidget()
+        self.tab_general = QTextBrowser()
+        self.tab_general.setOpenExternalLinks(False)
+        self.tab_general.anchorClicked.connect(self._on_anchor)
+        self.tab_revisions = QTextBrowser()
+        self.tab_imports = QTextBrowser()
+        self.tab_imports.setOpenExternalLinks(False)
+        self.tab_imports.anchorClicked.connect(self._on_anchor)
+        self.tabs.addTab(self.tab_general, _t("General"))
+        self.tabs.addTab(self.tab_revisions, _t("Revisions"))
+        self.tabs.addTab(self.tab_imports, _t("Imports"))
+        split.addWidget(self.tabs)
+        split.setStretchFactor(0, 1)
+        split.setStretchFactor(1, 2)
+        split.setSizes([280, 500])
 
         v.addWidget(split, 1)
 
@@ -126,14 +140,32 @@ class MibModulesDialog(QDialog):
         inv_b = QPushButton(_t("Invert"))
         inv_b.clicked.connect(self._invert)
         hb.addWidget(inv_b)
-        only_vendor_b = QPushButton(_t("Only vendor (no RFC/SNMPv2)"))
+        only_vendor_b = QPushButton(_t("Select vendor only"))
+        only_vendor_b.setToolTip(_t(
+            "Enable every vendor (enterprise) MIB and disable RFC/SNMPv2 "
+            "ones. Useful when you opened a device-specific module and "
+            "want its sibling vendor MIBs enabled too."))
         only_vendor_b.clicked.connect(self._only_vendor)
         hb.addWidget(only_vendor_b)
         hb.addStretch()
+        # Destructive action — gets its own styling and right-aligned
+        # stretch so it doesn't sit next to the harmless filters.
         unload_b = QPushButton(_t("Unload selected"))
+        unload_b.setStyleSheet(
+            "QPushButton { color: #a00; } "
+            "QPushButton:hover { background: #fee; }")
+        unload_b.setToolTip(_t(
+            "Delete the compiled JSON file(s) for the selected rows. "
+            "Irreversible — to re-add, use File → Load MIB."))
         unload_b.clicked.connect(self._unload_selected)
         hb.addWidget(unload_b)
         v.addLayout(hb)
+
+        # Live footer showing how many modules will end up enabled — gives
+        # immediate feedback for "Select vendor only", "None", etc.
+        self.count_label = QLabel("")
+        self.count_label.setStyleSheet("color: #666; padding-left: 2px;")
+        v.addWidget(self.count_label)
 
         btns = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok |
                                 QDialogButtonBox.StandardButton.Cancel)
@@ -142,6 +174,7 @@ class MibModulesDialog(QDialog):
         v.addWidget(btns)
 
         self._populate()
+        self._update_count()
 
     # ------------------------------------------------------------------
 
@@ -165,6 +198,7 @@ class MibModulesDialog(QDialog):
             if wanted is None or name in wanted:
                 chk.setChecked(True)
             chk.stateChanged.connect(lambda _=0: self._mark_changed())
+            chk.stateChanged.connect(lambda _=0: self._update_count())
             holder = QTableWidgetItem()
             self.tbl.setItem(r, 0, holder)
             self.tbl.setCellWidget(r, 0, chk)
@@ -185,6 +219,19 @@ class MibModulesDialog(QDialog):
         for r in range(self.tbl.rowCount()):
             name = self.tbl.item(r, 1).text().lower()
             self.tbl.setRowHidden(r, bool(text) and text not in name)
+
+    def _update_count(self) -> None:
+        """Footer feedback: how many modules will be loaded if the user
+        clicks OK right now."""
+        total = self.tbl.rowCount()
+        enabled = 0
+        for r in range(total):
+            cb = self.tbl.cellWidget(r, 0)
+            if isinstance(cb, QCheckBox) and cb.isChecked():
+                enabled += 1
+        self.count_label.setText(
+            _t("{enabled} of {total} modules enabled").format(
+                enabled=enabled, total=total))
 
     def _mark_changed(self) -> None:
         self.changed = True
@@ -301,10 +348,22 @@ class MibModulesDialog(QDialog):
     def _on_select(self) -> None:
         rows = {i.row() for i in self.tbl.selectedIndexes()}
         if not rows:
-            self.info.clear()
+            for w in (self.tab_general, self.tab_revisions, self.tab_imports):
+                w.clear()
             return
         name = self.tbl.item(min(rows), 1).text()
-        self.info.setHtml(self._render_info(name))
+        self._render_module(name)
+
+    def _render_module(self, name: str) -> None:
+        data = self._load_module(name)
+        if not data:
+            self.tab_general.setHtml(f"<i>Failed to read {name}.json.</i>")
+            self.tab_revisions.setHtml("")
+            self.tab_imports.setHtml("")
+            return
+        self.tab_general.setHtml(self._render_general(name, data))
+        self.tab_revisions.setHtml(self._render_revisions(name, data))
+        self.tab_imports.setHtml(self._render_imports(name, data))
 
     def _on_anchor(self, url) -> None:
         """Click on a dependency/dependent link → jump to that module row.
@@ -318,7 +377,11 @@ class MibModulesDialog(QDialog):
                 target_row = r
                 break
         if target_row < 0:
-            self.info.setHtml(self._render_stub_info(target))
+            # Not in the compiled cache — probably a pysmi stub module.
+            self.tab_general.setHtml(self._render_stub_info(target))
+            self.tab_revisions.setHtml("")
+            self.tab_imports.setHtml("")
+            self.tabs.setCurrentIndex(0)
             return
         if self.tbl.isRowHidden(target_row):
             self.filter_edit.blockSignals(True)
@@ -340,18 +403,16 @@ class MibModulesDialog(QDialog):
         except Exception:
             return raw
 
-    def _render_info(self, name: str) -> str:
-        data = self._load_module(name)
-        if not data:
-            return f"<i>Failed to read {name}.json.</i>"
-
-        mi = None
-        for k, v in data.items():
+    def _module_identity(self, data: dict) -> dict | None:
+        for _k, v in data.items():
             if isinstance(v, dict) and v.get("class") == "moduleidentity":
-                mi = v
-                break
+                return v
+        return None
 
-        # Size + summary strip at top
+    def _render_general(self, name: str, data: dict) -> str:
+        """Top-of-module summary: File name, OID, Organization, Contact,
+        Last updated, Description. Matches iReasoning's 'General' tab."""
+        mi = self._module_identity(data) or {}
         path = config.compiled_mibs_dir() / f"{name}.json"
         try:
             size = path.stat().st_size
@@ -359,67 +420,32 @@ class MibModulesDialog(QDialog):
             size = 0
         size_txt = f"{size // 1024} KB" if size >= 1024 else f"{size} B"
 
-        parts: list[str] = [
-            f'<h3 style="margin-bottom:4px">{name}</h3>',
-            f'<table style="margin:0 0 6px 0"><tr>'
-            f'<td><b>{_t("Size")}:</b></td><td>{size_txt}</td></tr>',
-        ]
-        if mi:
-            rows = []
-            if mi.get("oid"):
-                rows.append(("OID", f'.{mi["oid"]}'))
-            if mi.get("organization"):
-                rows.append((_t("Organization"), mi["organization"]))
-            if mi.get("contactinfo"):
-                rows.append((_t("Contact"),
-                             mi["contactinfo"].replace("\n", "<br>")))
-            if mi.get("lastupdated"):
-                rows.append((_t("Last updated"),
-                             self._fmt_timestamp(mi["lastupdated"])))
-            for k, v in rows:
-                parts.append(
-                    f'<tr><td style="padding-right:12px"><b>{k}:</b></td>'
-                    f'<td>{v}</td></tr>')
+        parts: list[str] = [f'<h3 style="margin:0 0 6px 0">{name}</h3>']
+        rows: list[tuple[str, str]] = [(_t("File Name"), path.name),
+                                        (_t("Size"), size_txt)]
+        if mi.get("oid"):
+            rows.append(("OID", f'.{mi["oid"]}'))
+        if mi.get("organization"):
+            rows.append((_t("Organization"),
+                          mi["organization"].replace("\n", "<br>")))
+        if mi.get("contactinfo"):
+            rows.append((_t("Contact"),
+                          mi["contactinfo"].replace("\n", "<br>")))
+        if mi.get("lastupdated"):
+            rows.append((_t("Last updated"),
+                          self._fmt_timestamp(mi["lastupdated"])))
+        parts.append('<table cellpadding="2">')
+        for k, v in rows:
+            parts.append(
+                f'<tr><td style="padding-right:12px;vertical-align:top">'
+                f'<b>{k}:</b></td><td>{v}</td></tr>')
         parts.append("</table>")
 
-        if mi and mi.get("description"):
+        if mi.get("description"):
             parts.append(
                 f'<p><b>{_t("Description")}:</b><br>{mi["description"]}</p>')
 
-        if mi:
-            revs = mi.get("revisions") or []
-            if revs:
-                parts.append(f'<p><b>{_t("Revisions")}:</b></p><ul>')
-                for r in revs:
-                    parts.append(f'<li>{self._fmt_timestamp(r.get("revision",""))} '
-                                 f'— {r.get("description","")}</li>')
-                parts.append("</ul>")
-
-        # Imports: links to other modules. pysmi groups them
-        # {mod_name: [sym, …]} plus a meta key "class":"imports" that we skip.
-        imports = data.get("imports") or {}
-        imp_items = [(m, s) for m, s in sorted(imports.items())
-                     if m != "class" and isinstance(s, list)]
-        if imp_items:
-            parts.append(
-                f'<p><b>{_t("Imports from")}</b> ({len(imp_items)}):</p><ul>')
-            for mod, syms in imp_items:
-                link = f'<a href="{mod}">{mod}</a>'
-                sym_text = ", ".join(sorted(syms))
-                parts.append(f'<li>{link} — <i>{sym_text}</i></li>')
-            parts.append("</ul>")
-
-        # Dependents — lazy build.
-        if self._dependents is None:
-            self._dependents = self._build_dependents_index()
-        deps = self._dependents.get(name) or set()
-        if deps:
-            parts.append(f'<p><b>{_t("Imported by")}</b> ({len(deps)}):</p><ul>')
-            for m in sorted(deps):
-                parts.append(f'<li><a href="{m}">{m}</a></li>')
-            parts.append("</ul>")
-
-        # Counts of definition classes (how many ObjectType / TC / etc.)
+        # Definition counts live here too — compact summary of what's inside.
         counts: dict[str, int] = {}
         for k, v in data.items():
             if k in ("imports", "meta", "_symtable_cache_", ""):
@@ -431,14 +457,55 @@ class MibModulesDialog(QDialog):
         if counts:
             items = ", ".join(f"{k} ({v})" for k, v in
                               sorted(counts.items(), key=lambda x: -x[1]))
-            parts.append(f"<br><b>{_t('Definitions')}:</b> {items}<br>")
+            parts.append(f"<p><b>{_t('Definitions')}:</b> {items}</p>")
 
         meta = data.get("meta") or {}
         src_comment = next((c for c in meta.get("comments", [])
                             if isinstance(c, str) and "source" in c.lower()), "")
         if src_comment:
-            parts.append(f"<br><small>{src_comment}</small>")
+            parts.append(f"<p><small>{src_comment}</small></p>")
+        return "".join(parts)
 
+    def _render_revisions(self, name: str, data: dict) -> str:
+        """MODULE-IDENTITY revisions list. Empty-message if the module
+        doesn't declare any."""
+        mi = self._module_identity(data) or {}
+        revs = mi.get("revisions") or []
+        if not revs:
+            return f'<p><i>{_t("No revisions recorded.")}</i></p>'
+        parts: list[str] = [f"<h4>{_t('Revisions')}</h4>", "<ul>"]
+        for r in revs:
+            stamp = self._fmt_timestamp(r.get("revision", ""))
+            desc = (r.get("description") or "").replace("\n", "<br>")
+            parts.append(f"<li><b>{stamp}</b><br>{desc}</li>")
+        parts.append("</ul>")
+        return "".join(parts)
+
+    def _render_imports(self, name: str, data: dict) -> str:
+        """Imports-from + imported-by links."""
+        parts: list[str] = []
+        imports = data.get("imports") or {}
+        imp_items = [(m, s) for m, s in sorted(imports.items())
+                     if m != "class" and isinstance(s, list)]
+        if imp_items:
+            parts.append(
+                f'<h4>{_t("Imports from")} ({len(imp_items)})</h4><ul>')
+            for mod, syms in imp_items:
+                link = f'<a href="{mod}">{mod}</a>'
+                sym_text = ", ".join(sorted(syms))
+                parts.append(f'<li>{link} — <i>{sym_text}</i></li>')
+            parts.append("</ul>")
+        if self._dependents is None:
+            self._dependents = self._build_dependents_index()
+        deps = self._dependents.get(name) or set()
+        if deps:
+            parts.append(
+                f'<h4>{_t("Imported by")} ({len(deps)})</h4><ul>')
+            for m in sorted(deps):
+                parts.append(f'<li><a href="{m}">{m}</a></li>')
+            parts.append("</ul>")
+        if not parts:
+            return f'<p><i>{_t("No imports / dependents.")}</i></p>'
         return "".join(parts)
 
     def _accept(self) -> None:

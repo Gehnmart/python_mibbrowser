@@ -103,7 +103,7 @@ class MibLoadDialog(QDialog):
         v.addWidget(self.net_chk)
 
         hb = QHBoxLayout()
-        add_dir_b = QPushButton("Add source directory…")
+        add_dir_b = QPushButton(_t("Add source directory…"))
         add_dir_b.clicked.connect(self._add_dir)
         hb.addWidget(add_dir_b)
 
@@ -115,7 +115,7 @@ class MibLoadDialog(QDialog):
 
         btns = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Close)
-        self.compile_btn = QPushButton("Compile")
+        self.compile_btn = QPushButton(_t("Compile"))
         self.compile_btn.setDefault(True)
         self.compile_btn.clicked.connect(self._start_compile)
         btns.addButton(self.compile_btn, QDialogButtonBox.ButtonRole.ActionRole)

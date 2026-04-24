@@ -5,6 +5,7 @@ from typing import Any, Optional
 
 from PyQt6.QtCore import QAbstractTableModel, QModelIndex, Qt
 
+from ..i18n import _t
 from ..mib_loader import MibTree
 from ..snmp_ops import VarBind
 
@@ -82,13 +83,31 @@ class ResultTableModel(QAbstractTableModel):
                 return vb.type_name
             if col == 3:
                 return src
-        if role == Qt.ItemDataRole.ToolTipRole and col == 0:
-            return "." + ".".join(str(p) for p in vb.oid)
+        if role == Qt.ItemDataRole.ToolTipRole:
+            # Expand the OID into a full tooltip: symbolic name,
+            # module, dotted form, syntax/access. Same info the
+            # Properties panel shows, but hoverable inline.
+            lines: list[str] = []
+            dotted = "." + ".".join(str(p) for p in vb.oid)
+            if self._tree is not None:
+                node = self._tree.lookup_oid(vb.oid)
+                if node is None and len(vb.oid) > 1:
+                    node = self._tree.lookup_oid(vb.oid[:-1])
+                if node is not None:
+                    lines.append(f"{node.name}")
+                    if node.module:
+                        lines.append(f"MIB: {node.module}")
+                    if node.syntax:
+                        lines.append(f"syntax: {node.syntax}")
+                    if node.access:
+                        lines.append(f"access: {node.access}")
+            lines.append(dotted)
+            return "\n".join(lines)
         return None
 
     def headerData(self, section: int, orientation, role=Qt.ItemDataRole.DisplayRole):
         if role == Qt.ItemDataRole.DisplayRole:
             if orientation == Qt.Orientation.Horizontal:
-                return COLUMNS[section]
+                return _t(COLUMNS[section])
             return str(section + 1)
         return None

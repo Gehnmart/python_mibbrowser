@@ -9,10 +9,11 @@ from typing import Optional
 import pyqtgraph as pg
 from PyQt6.QtCore import QTimer, Qt
 from PyQt6.QtWidgets import (
-    QCheckBox, QFileDialog, QHBoxLayout, QLabel, QMessageBox, QPushButton,
-    QSpinBox, QToolBar, QVBoxLayout, QWidget,
+    QCheckBox, QFileDialog, QHBoxLayout, QLabel, QLineEdit, QMessageBox,
+    QPushButton, QSpinBox, QToolBar, QVBoxLayout, QWidget,
 )
 
+from ..i18n import _t
 from .. import snmp_ops, workers
 from ..config import Agent
 
@@ -21,11 +22,13 @@ MAX_POINTS = 600
 
 
 class GraphTab(QWidget):
-    def __init__(self, parent, agent: Agent, oid: tuple[int, ...], label: str) -> None:
+    def __init__(self, parent, agent: Agent, oid: tuple[int, ...], label: str,
+                 tree=None) -> None:
         super().__init__(parent)
         self.agent = agent
         self.oid = oid
         self.label = label
+        self.tree = tree
         self._max_points = MAX_POINTS
 
         self._t: deque = deque(maxlen=self._max_points)
@@ -49,12 +52,24 @@ class GraphTab(QWidget):
 
         tb = QToolBar()
         v.addWidget(tb)
-        self.pause_btn = QPushButton("⏸ Pause"); self.pause_btn.setCheckable(True)
-        self.pause_btn.toggled.connect(self._toggle_pause); tb.addWidget(self.pause_btn)
-        restart_b = QPushButton("↻ Restart"); restart_b.clicked.connect(self._restart); tb.addWidget(restart_b)
+
+        # Editable OID inline — lets the user switch targets without closing
+        # the tab and re-opening a new Graph each time.
+        tb.addWidget(QLabel(_t("OID") + ": "))
+        self.oid_edit = QLineEdit(self.label)
+        self.oid_edit.setMinimumWidth(220)
+        self.oid_edit.returnPressed.connect(self._change_oid)
+        tb.addWidget(self.oid_edit)
+        apply_b = QPushButton(_t("Apply")); apply_b.clicked.connect(self._change_oid)
+        tb.addWidget(apply_b)
 
         tb.addSeparator()
-        tb.addWidget(QLabel(" Interval (s): "))
+        self.pause_btn = QPushButton(_t("⏸ Pause")); self.pause_btn.setCheckable(True)
+        self.pause_btn.toggled.connect(self._toggle_pause); tb.addWidget(self.pause_btn)
+        restart_b = QPushButton(_t("↻ Restart")); restart_b.clicked.connect(self._restart); tb.addWidget(restart_b)
+
+        tb.addSeparator()
+        tb.addWidget(QLabel(_t(" Interval (s): ")))
         self.interval = QSpinBox(); self.interval.setRange(1, 3600); self.interval.setValue(3)
         self.interval.valueChanged.connect(self._interval_changed); tb.addWidget(self.interval)
 
@@ -64,9 +79,9 @@ class GraphTab(QWidget):
         self.grid_chk.toggled.connect(self._grid_toggle); tb.addWidget(self.grid_chk)
 
         tb.addSeparator()
-        png_b = QPushButton("Save PNG"); png_b.clicked.connect(self._save_png); tb.addWidget(png_b)
-        csv_b = QPushButton("Export CSV"); csv_b.clicked.connect(self._export_csv); tb.addWidget(csv_b)
-        imp_b = QPushButton("Import CSV"); imp_b.clicked.connect(self._import_csv); tb.addWidget(imp_b)
+        png_b = QPushButton(_t("Save PNG")); png_b.clicked.connect(self._save_png); tb.addWidget(png_b)
+        csv_b = QPushButton(_t("Export CSV")); csv_b.clicked.connect(self._export_csv); tb.addWidget(csv_b)
+        imp_b = QPushButton(_t("Import CSV")); imp_b.clicked.connect(self._import_csv); tb.addWidget(imp_b)
 
         pg.setConfigOptions(antialias=True, background="w", foreground="k")
         self.plot = pg.PlotWidget(title=f"{self.label}")
@@ -77,7 +92,7 @@ class GraphTab(QWidget):
         self.curve = self.plot.plot([], [], pen=pg.mkPen(color=(20, 120, 200), width=2))
         v.addWidget(self.plot, 1)
 
-        self.status_label = QLabel("—")
+        self.status_label = QLabel(_t("—"))
         v.addWidget(self.status_label)
 
     # Controls ---------------------------------------------------------
@@ -110,11 +125,52 @@ class GraphTab(QWidget):
     def _grid_toggle(self, checked: bool) -> None:
         self.plot.showGrid(x=checked, y=checked, alpha=0.25)
 
+    def _change_oid(self) -> None:
+        text = self.oid_edit.text().strip()
+        if not text:
+            return
+        # Resolve first so we fail fast on a bogus OID without trashing
+        # the existing trace.
+        if self.tree is not None:
+            resolved = self.tree.resolve_name(text)
+            if resolved is None:
+                QMessageBox.warning(self, _t("Graph…"),
+                                    _t("Cannot resolve OID"))
+                return
+        else:
+            try:
+                resolved = tuple(int(p) for p in text.strip(".").split("."))
+            except ValueError:
+                QMessageBox.warning(self, _t("Graph…"),
+                                    _t("Cannot resolve OID"))
+                return
+        # If we've collected real data, make the user confirm before the
+        # trace is wiped — accidental Apply was a documented footgun.
+        SAMPLE_THRESHOLD = 5
+        if len(self._v) >= SAMPLE_THRESHOLD:
+            btn = QMessageBox.question(
+                self, _t("Graph…"),
+                _t("This will discard {n} samples of the current trace.\n"
+                   "Export CSV first if you want to keep them.\n\n"
+                   "Continue?").format(n=len(self._v)),
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No)
+            if btn != QMessageBox.StandardButton.Yes:
+                # Put the old OID text back so the user isn't left wondering
+                # why the field looks different from the trace.
+                self.oid_edit.setText(self.label)
+                return
+        self.oid = resolved
+        self.label = text
+        self.plot.setTitle(text)
+        self._restart()
+
     # SNMP polling ----------------------------------------------------
 
     def _poll(self) -> None:
         if self._paused:
             return
+        workers.prune_threads(self._active_threads)
         def on_finished(vbs):
             if not vbs:
                 return

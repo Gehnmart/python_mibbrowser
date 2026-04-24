@@ -18,6 +18,7 @@ from PyQt6.QtWidgets import (
     QToolBar, QVBoxLayout, QWidget,
 )
 
+from ..i18n import _t
 from .. import config
 from ..mib_loader import MibTree
 from ..trap_receiver import TrapEvent, TrapListener
@@ -32,6 +33,25 @@ class TrapRule:
     action: str = "accept"           # accept / ignore
     set_severity: str = ""           # "" keeps existing
     set_message: str = ""            # format str, {oid} etc.
+    # Side-effect actions — mirror iReasoning Add Rule's "Run command",
+    # "Play sound". Template substitution same as set_message: {oid},
+    # {src}, {sev}, {msg}, {name}.
+    run_command: str = ""
+    play_sound: str = ""
+
+
+def _hex_dump(data: bytes) -> str:
+    """Classic 16-byte-per-line hex dump with ASCII gutter — the format
+    you'd get from `xxd` or `hexdump -C`. Use for visually scanning a
+    trap PDU when the wire format looks suspicious."""
+    lines = []
+    for i in range(0, len(data), 16):
+        chunk = data[i:i+16]
+        hex_part = " ".join(f"{b:02x}" for b in chunk)
+        hex_part = f"{hex_part:<47}"    # pad to fixed width
+        ascii_part = "".join(chr(b) if 32 <= b < 127 else "." for b in chunk)
+        lines.append(f"{i:08x}  {hex_part}  {ascii_part}")
+    return "\n".join(lines)
 
 
 def _wild_to_re(pat: str) -> re.Pattern:
@@ -118,7 +138,7 @@ class TrapTableModel(QAbstractTableModel):
 
     def headerData(self, s, o, role=Qt.ItemDataRole.DisplayRole):
         if role == Qt.ItemDataRole.DisplayRole and o == Qt.Orientation.Horizontal:
-            return TRAP_COLS[s]
+            return _t(TRAP_COLS[s])
         return None
 
     def get(self, row: int) -> Optional[TrapEvent]:
@@ -142,28 +162,75 @@ class _TrapBridge(QObject):
 class TrapRuleDialog(QDialog):
     def __init__(self, rule: TrapRule, parent=None) -> None:
         super().__init__(parent)
-        self.setWindowTitle(f"Trap rule: {rule.name}")
+        self.setWindowTitle(_t("Add Rule") if rule.name == "new-rule"
+                             else f"{_t('Trap rule')}: {rule.name}")
+        self.setMinimumWidth(520)
         self.rule = TrapRule(**asdict(rule))
         form = QFormLayout(self)
+
+        # Conditions ----------------------------------------------------
+        header = QLabel("<b>" + _t("Conditions") + "</b>")
+        form.addRow(header)
         self.name_e   = QLineEdit(self.rule.name)
         self.oid_e    = QLineEdit(self.rule.match_oid)
         self.ips_e    = QLineEdit(self.rule.allow_ips)
         self.pay_e    = QLineEdit(self.rule.payload_contains)
-        self.action_c = QComboBox(); self.action_c.addItems(("accept","ignore")); self.action_c.setCurrentText(self.rule.action)
-        self.sev_c    = QComboBox(); self.sev_c.addItems(("", "INFO","LOW","MEDIUM","HIGH","CRITICAL")); self.sev_c.setCurrentText(self.rule.set_severity)
+        form.addRow(_t("Name") + " *", self.name_e)
+        form.addRow(_t("Trap OID matches"), self.oid_e)
+        form.addRow(_t("Source IPs allowed"), self.ips_e)
+        form.addRow(_t("Payload contains"), self.pay_e)
+
+        # Actions -------------------------------------------------------
+        form.addRow(QLabel("<b>" + _t("Actions") + "</b>"))
+        self.action_c = QComboBox()
+        self.action_c.addItems(("accept", "ignore"))
+        self.action_c.setCurrentText(self.rule.action)
+        self.sev_c    = QComboBox()
+        self.sev_c.addItems(("", "INFO", "LOW", "MEDIUM", "HIGH", "CRITICAL"))
+        self.sev_c.setCurrentText(self.rule.set_severity)
         self.msg_e    = QLineEdit(self.rule.set_message)
-        form.addRow("Name", self.name_e)
-        form.addRow("Trap OID matches", self.oid_e)
-        form.addRow("Source IPs allowed", self.ips_e)
-        form.addRow("Payload contains", self.pay_e)
-        form.addRow("Action", self.action_c)
-        form.addRow("Set severity", self.sev_c)
-        form.addRow("Set message", self.msg_e)
+        self.msg_e.setPlaceholderText("{oid} · {src} · {sev}")
+        self.cmd_e    = QLineEdit(self.rule.run_command)
+        self.cmd_e.setPlaceholderText(
+            "notify-send \"Trap {src}\" \"{oid}\"")
+
+        # Sound field with Browse button.
+        sound_row = QWidget()
+        sr = QHBoxLayout(sound_row); sr.setContentsMargins(0, 0, 0, 0)
+        self.sound_e = QLineEdit(self.rule.play_sound)
+        self.sound_e.setPlaceholderText("/path/to/alert.wav")
+        browse_b = QPushButton(_t("Browse…"))
+        browse_b.clicked.connect(self._pick_sound)
+        sr.addWidget(self.sound_e, 1); sr.addWidget(browse_b)
+
+        form.addRow(_t("Action"), self.action_c)
+        form.addRow(_t("Set severity"), self.sev_c)
+        form.addRow(_t("Set message"), self.msg_e)
+        form.addRow(_t("Run command"), self.cmd_e)
+        form.addRow(_t("Play sound"), sound_row)
+
+        # Template legend — discoverable right next to the fields that
+        # support it, so the user knows what {oid} etc. expand to.
+        hint = QLabel(_t(
+            "Templates in Message / Run command: {oid}, {src}, {sev}, "
+            "{msg}, {name}"))
+        hint.setWordWrap(True)
+        hint.setStyleSheet("color: #666;")
+        form.addRow(hint)
+
         btns = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok |
                                 QDialogButtonBox.StandardButton.Cancel)
         btns.accepted.connect(self._accept)
         btns.rejected.connect(self.reject)
         form.addRow(btns)
+
+    def _pick_sound(self) -> None:
+        from PyQt6.QtWidgets import QFileDialog
+        path, _sel = QFileDialog.getOpenFileName(
+            self, _t("Play sound"), self.sound_e.text() or "",
+            "Audio (*.wav *.mp3 *.ogg *.flac);;All files (*)")
+        if path:
+            self.sound_e.setText(path)
 
     def _accept(self) -> None:
         self.rule.name = self.name_e.text().strip() or "unnamed"
@@ -173,6 +240,8 @@ class TrapRuleDialog(QDialog):
         self.rule.action = self.action_c.currentText()
         self.rule.set_severity = self.sev_c.currentText()
         self.rule.set_message = self.msg_e.text()
+        self.rule.run_command = self.cmd_e.text().strip()
+        self.rule.play_sound = self.sound_e.text().strip()
         self.accept()
 
 
@@ -183,7 +252,7 @@ class TrapRuleDialog(QDialog):
 class TrapReceiverWindow(QMainWindow):
     def __init__(self, tree: MibTree, settings, parent=None) -> None:
         super().__init__(parent)
-        self.setWindowTitle("Trap Receiver")
+        self.setWindowTitle(_t("Trap Receiver"))
         self.resize(1000, 640)
         self.tree = tree
         self.settings = settings
@@ -222,37 +291,37 @@ class TrapReceiverWindow(QMainWindow):
         tb = QToolBar("Main")
         self.addToolBar(tb)
 
-        self.start_btn = QPushButton("▶ Start")
+        self.start_btn = QPushButton(_t("▶ Start"))
         self.start_btn.clicked.connect(self._start)
         tb.addWidget(self.start_btn)
 
-        self.stop_btn = QPushButton("⏸ Stop")
+        self.stop_btn = QPushButton(_t("⏸ Stop"))
         self.stop_btn.clicked.connect(self._stop)
         self.stop_btn.setEnabled(False)
         tb.addWidget(self.stop_btn)
 
         tb.addSeparator()
-        tb.addWidget(QLabel(" Port: "))
+        tb.addWidget(QLabel(_t(" Port: ")))
         self.port_edit = QLineEdit(str(self.settings.trap_port))
         self.port_edit.setFixedWidth(70)
         tb.addWidget(self.port_edit)
 
         tb.addSeparator()
-        tb.addWidget(QLabel(" Filter: "))
+        tb.addWidget(QLabel(_t(" Filter: ")))
         self.filter_edit = QLineEdit()
         self.filter_edit.setMinimumWidth(220)
         tb.addWidget(self.filter_edit)
 
         tb.addSeparator()
-        clear_btn = QPushButton("Clear")
+        clear_btn = QPushButton(_t("Clear"))
         clear_btn.clicked.connect(self._clear)
         tb.addWidget(clear_btn)
 
-        rules_btn = QPushButton("Rules…")
+        rules_btn = QPushButton(_t("Rules…"))
         rules_btn.clicked.connect(self._open_rules)
         tb.addWidget(rules_btn)
 
-        save_btn = QPushButton("Save…")
+        save_btn = QPushButton(_t("Save…"))
         save_btn.clicked.connect(self._save_to_file)
         tb.addWidget(save_btn)
 
@@ -275,6 +344,10 @@ class TrapReceiverWindow(QMainWindow):
 
         self.details = QTextBrowser()
         self.details.setReadOnly(True)
+        self.details.setOpenExternalLinks(False)
+        self.details.setOpenLinks(False)
+        self.details.anchorClicked.connect(self._on_detail_anchor)
+        self._current_ev: Optional[TrapEvent] = None
         split.addWidget(self.details)
         split.setSizes([380, 220])
         self.setCentralWidget(split)
@@ -292,8 +365,9 @@ class TrapReceiverWindow(QMainWindow):
             QMessageBox.warning(self, "Trap", "Invalid port.")
             return
         self.settings.trap_port = port
-        self.listener = TrapListener(port=port,
-                                     on_trap=self.bridge.trap_received.emit)
+        self.listener = TrapListener(
+            port=port, on_trap=self.bridge.trap_received.emit,
+            accept_from=self.settings.trap_accept_from)
         try:
             self.listener.start()
         except PermissionError as exc:
@@ -322,6 +396,7 @@ class TrapReceiverWindow(QMainWindow):
     def _handle_trap(self, ev: TrapEvent) -> None:
         # Apply rules
         ignored = False
+        side_effects: list[tuple[str, str]] = []   # (action, templated string)
         for rule in self.rules:
             if not _rule_matches(rule, ev):
                 continue
@@ -330,17 +405,68 @@ class TrapReceiverWindow(QMainWindow):
                 continue
             if rule.set_severity:
                 ev.severity = rule.set_severity
+            fmt_kwargs = dict(oid=ev.trap_oid, ip=ev.source_ip,
+                              src=ev.source_ip, community=ev.community,
+                              sev=ev.severity or "", msg=ev.message or "",
+                              name=rule.name)
             if rule.set_message:
                 try:
-                    ev.message = rule.set_message.format(
-                        oid=ev.trap_oid, ip=ev.source_ip,
-                        community=ev.community)
+                    ev.message = rule.set_message.format(**fmt_kwargs)
                 except Exception:
                     ev.message = rule.set_message
+            if rule.run_command:
+                try:
+                    cmd = rule.run_command.format(**fmt_kwargs)
+                except Exception:
+                    cmd = rule.run_command
+                side_effects.append(("cmd", cmd))
+            if rule.play_sound:
+                side_effects.append(("sound", rule.play_sound))
         if ignored:
             self._rules_ignored_count += 1
             return
         self.model.add(ev)
+        for kind, arg in side_effects:
+            if kind == "cmd":
+                self._run_rule_command(arg)
+            elif kind == "sound":
+                self._play_rule_sound(arg)
+
+    def _run_rule_command(self, cmd: str) -> None:
+        """Fire-and-forget shell exec for a rule's Run Command. We never
+        block the trap loop — if the command hangs, that's its problem,
+        not ours."""
+        import shlex, subprocess
+        try:
+            subprocess.Popen(
+                shlex.split(cmd), stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL, start_new_session=True)
+        except Exception as exc:
+            self.statusBar().showMessage(
+                f"rule command failed: {exc}", 5000)
+
+    def _play_rule_sound(self, path: str) -> None:
+        """Play a .wav/.mp3 — prefer paplay (PulseAudio), fall back to
+        ffplay. Best-effort; failures are silent but surfaced in status."""
+        import shutil, subprocess
+        player = (shutil.which("paplay") or shutil.which("aplay")
+                  or shutil.which("ffplay") or shutil.which("mpv"))
+        if not player:
+            self.statusBar().showMessage(
+                "no audio player found for rule sound", 5000)
+            return
+        args = [player]
+        if player.endswith(("ffplay", "mpv")):
+            args += ["-nodisp", "-autoexit"] if player.endswith("ffplay") \
+                    else ["--no-video", "--really-quiet"]
+        args.append(path)
+        try:
+            subprocess.Popen(args, stdout=subprocess.DEVNULL,
+                             stderr=subprocess.DEVNULL,
+                             start_new_session=True)
+        except Exception as exc:
+            self.statusBar().showMessage(
+                f"rule sound failed: {exc}", 5000)
 
     def _on_select(self, idx: QModelIndex) -> None:
         src = self.proxy.mapToSource(idx)
@@ -369,7 +495,51 @@ class TrapReceiverWindow(QMainWindow):
         parts.append("</ul>")
         if ev.message:
             parts.append(f"<br><b>Message:</b> {ev.message}")
+        if ev.raw_bytes:
+            parts.append(
+                f"<br><br><a href='hex:{id(ev)}'>{_t('Show raw PDU (hex dump)')}</a>"
+                f"  · {len(ev.raw_bytes)} bytes")
         self.details.setHtml("".join(parts))
+        # Stash the current event so anchorClicked can find it.
+        self._current_ev = ev
+
+    def _on_detail_anchor(self, url) -> None:
+        """Details pane has an inline 'Show raw PDU' link — intercept
+        clicks and open a hex-dump modal. Using anchorClicked instead of
+        a button keeps the detail panel clean when there's no raw data
+        (old events loaded from JSON have raw_bytes='')."""
+        if url.scheme() != "hex":
+            return
+        ev = self._current_ev
+        if ev is None or not ev.raw_bytes:
+            return
+        self._show_hex_dump(ev.raw_bytes, ev)
+
+    def _show_hex_dump(self, data: bytes, ev: TrapEvent) -> None:
+        from PyQt6.QtCore import Qt as _Qt
+        dlg = QDialog(self)
+        dlg.setWindowTitle(_t("Raw PDU hex dump"))
+        dlg.resize(720, 480)
+        # Delete the dialog on close so repeated clicks on "Show raw
+        # PDU" don't accumulate child QDialogs attached to TrapReceiverWindow.
+        dlg.setAttribute(_Qt.WidgetAttribute.WA_DeleteOnClose)
+        v = QVBoxLayout(dlg)
+        v.addWidget(QLabel(
+            f"{len(data)} bytes · {ev.source_ip}:{ev.source_port} · "
+            f"v{ev.version} · {time.strftime('%H:%M:%S', time.localtime(ev.time))}"))
+        pt = QTextBrowser()
+        from PyQt6.QtGui import QFont
+        font = QFont("Monospace"); font.setStyleHint(QFont.StyleHint.TypeWriter)
+        font.setPointSize(9)
+        pt.setFont(font)
+        pt.setPlainText(_hex_dump(data))
+        v.addWidget(pt, 1)
+        bb = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
+        bb.button(QDialogButtonBox.StandardButton.Close).setText(_t("Close"))
+        bb.rejected.connect(dlg.accept)
+        bb.accepted.connect(dlg.accept)
+        v.addWidget(bb)
+        dlg.exec()
 
     def _clear(self) -> None:
         self.model.clear()
@@ -389,7 +559,7 @@ class TrapReceiverWindow(QMainWindow):
     def _open_rules(self) -> None:
         # Simple list dialog: add/edit/remove.
         from PyQt6.QtWidgets import QListWidget, QListWidgetItem, QHBoxLayout, QVBoxLayout, QPushButton, QDialog
-        d = QDialog(self); d.setWindowTitle("Trap rules")
+        d = QDialog(self); d.setWindowTitle(_t("Trap rules"))
         d.resize(520, 420)
         vb = QVBoxLayout(d)
         lst = QListWidget()
@@ -397,8 +567,8 @@ class TrapReceiverWindow(QMainWindow):
             QListWidgetItem(f"{r.name}  [{r.action}]  OID={r.match_oid}  IP={r.allow_ips}", lst)
         vb.addWidget(lst)
         hb = QHBoxLayout()
-        add_b = QPushButton("Add"); edit_b = QPushButton("Edit"); del_b = QPushButton("Delete")
-        close_b = QPushButton("Close")
+        add_b = QPushButton(_t("Add")); edit_b = QPushButton(_t("Edit")); del_b = QPushButton(_t("Delete"))
+        close_b = QPushButton(_t("Close"))
         hb.addWidget(add_b); hb.addWidget(edit_b); hb.addWidget(del_b); hb.addStretch(); hb.addWidget(close_b)
         vb.addLayout(hb)
         def refresh():
