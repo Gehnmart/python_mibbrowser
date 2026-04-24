@@ -425,6 +425,8 @@ class MibBrowserWindow(QMainWindow):
         # Help no longer carries the Language submenu — preferences owns it
         # now (a single place to change, reduces churn).
         help_m = mb.addMenu(_t("&Help"))
+        help_m.addAction(self._action(_t("User Guide…"),
+                                       self._open_user_guide))
         help_m.addAction(self._action(_t("Keyboard shortcuts…"),
                                        self._show_shortcuts))
         help_m.addAction(self._action(_t("MIB tree icons…"),
@@ -1783,6 +1785,37 @@ class MibBrowserWindow(QMainWindow):
                     f"<td>{desc}</td></tr>")
         txt += "</table>"
         QMessageBox.information(self, _t("MIB tree icons"), txt)
+
+    def _open_user_guide(self) -> None:
+        """Open the bundled HTML user guide in the system browser.
+
+        The guide lives under docs/guide/index.html in the source
+        checkout, and also gets copied into the PyInstaller bundle via
+        build.sh. We walk up from this file to find it either way."""
+        from pathlib import Path
+
+        from PyQt6.QtCore import QUrl
+        from PyQt6.QtGui import QDesktopServices
+        # 1. Source checkout: <repo>/docs/guide/index.html
+        repo_guide = Path(__file__).resolve().parent.parent.parent \
+                     / "docs" / "guide" / "index.html"
+        # 2. PyInstaller bundle: _internal/docs/guide/index.html, or
+        #    similar — fall through via QStandardPaths later if needed.
+        candidates = [repo_guide]
+        import sys
+        if getattr(sys, "frozen", False):
+            candidates.append(Path(sys._MEIPASS) / "docs" / "guide"
+                              / "index.html")
+        for p in candidates:
+            if p.exists():
+                QDesktopServices.openUrl(QUrl.fromLocalFile(str(p)))
+                return
+        QMessageBox.information(
+            self, _t("User Guide"),
+            _t("The User Guide isn't installed with this build.\n"
+               "Online version: "
+               "https://github.com/Gehnmart/python_mibbrowser"
+               "/blob/main/docs/guide/index.html"))
 
     def _show_shortcuts(self) -> None:
         rows = [

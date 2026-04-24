@@ -630,6 +630,10 @@ _RU = {
 
     # Help → Keyboard shortcuts
     "Keyboard shortcuts…":  "Горячие клавиши…",
+    "User Guide":           "Руководство пользователя",
+    "User Guide…":          "Руководство пользователя…",
+    "The User Guide isn't installed with this build.\nOnline version: https://github.com/Gehnmart/python_mibbrowser/blob/main/docs/guide/index.html":
+        "Руководство пользователя не входит в эту сборку.\nОнлайн-версия: https://github.com/Gehnmart/python_mibbrowser/blob/main/docs/guide/index.html",
     "Keyboard shortcuts":   "Горячие клавиши",
     "MIB tree icons…":      "Иконки дерева MIB…",
     "MIB tree icons":       "Иконки дерева MIB",

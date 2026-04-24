@@ -1,0 +1,321 @@
+/* User Guide stylesheet — modern, responsive, dark-mode aware. */
+
+:root {
+  --bg: #ffffff;
+  --surface: #f7f8fa;
+  --surface-alt: #eef1f6;
+  --text: #1b1f24;
+  --text-muted: #5a6370;
+  --accent: #2c6aa0;
+  --accent-soft: #e6edf5;
+  --border: #e2e6ec;
+  --code-bg: #f4f5f7;
+  --code-border: #d7dce3;
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.06), 0 4px 14px rgba(0, 0, 0, 0.05);
+  --sidebar-w: 260px;
+  --content-w: 820px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0f1216;
+    --surface: #171b21;
+    --surface-alt: #1e242c;
+    --text: #e5e8ed;
+    --text-muted: #8a95a5;
+    --accent: #5aa8e8;
+    --accent-soft: #1b2a3e;
+    --border: #272d36;
+    --code-bg: #141820;
+    --code-border: #2a313b;
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 4px 14px rgba(0, 0, 0, 0.3);
+  }
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0; padding: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 15px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+        "Helvetica Neue", Arial, sans-serif;
+  scroll-behavior: smooth;
+}
+
+.layout {
+  display: flex;
+  min-height: 100vh;
+}
+
+/* --- Sidebar --- */
+aside.nav {
+  width: var(--sidebar-w);
+  flex-shrink: 0;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  padding: 28px 22px;
+  position: sticky;
+  top: 0;
+  max-height: 100vh;
+  overflow-y: auto;
+}
+
+aside.nav .brand {
+  font-weight: 700;
+  font-size: 18px;
+  letter-spacing: -0.01em;
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+
+aside.nav .brand .dot {
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--accent), #8aa9ff);
+  box-shadow: 0 0 0 2px var(--accent-soft);
+}
+
+aside.nav .version {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-bottom: 24px;
+}
+
+aside.nav ol {
+  list-style: none;
+  padding: 0; margin: 0;
+  counter-reset: step;
+}
+
+aside.nav li {
+  counter-increment: step;
+  margin: 2px 0;
+}
+
+aside.nav a {
+  display: block;
+  padding: 7px 10px;
+  color: var(--text-muted);
+  text-decoration: none;
+  border-radius: 6px;
+  font-size: 13.5px;
+  transition: background .15s, color .15s;
+}
+aside.nav a::before {
+  content: counter(step, decimal-leading-zero) ".";
+  color: var(--text-muted);
+  opacity: .55;
+  margin-right: 8px;
+  font-variant-numeric: tabular-nums;
+}
+aside.nav a:hover {
+  background: var(--accent-soft);
+  color: var(--text);
+}
+aside.nav a.active {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+/* --- Main content --- */
+main {
+  flex: 1;
+  padding: 48px 56px;
+  max-width: calc(var(--content-w) + 112px);
+  margin: 0 auto;
+}
+
+header.hero {
+  margin-bottom: 56px;
+  padding-bottom: 32px;
+  border-bottom: 1px solid var(--border);
+}
+
+header.hero h1 {
+  font-size: 38px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  margin: 0 0 10px 0;
+  background: linear-gradient(135deg, var(--text) 0%, var(--accent) 120%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+header.hero p.lead {
+  font-size: 17px;
+  color: var(--text-muted);
+  margin: 0;
+  max-width: 600px;
+}
+
+header.hero .badges {
+  margin-top: 18px;
+  display: flex; gap: 8px; flex-wrap: wrap;
+}
+
+header.hero .badge {
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--surface-alt);
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+}
+
+section {
+  margin-bottom: 56px;
+}
+
+section h2 {
+  font-size: 24px;
+  margin: 0 0 16px 0;
+  letter-spacing: -0.01em;
+  display: flex; align-items: center; gap: 12px;
+  scroll-margin-top: 20px;
+}
+section h2 .num {
+  display: inline-block;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent);
+  padding: 3px 8px;
+  background: var(--accent-soft);
+  border-radius: 4px;
+  font-variant-numeric: tabular-nums;
+}
+
+section h3 {
+  font-size: 16px;
+  margin: 24px 0 8px 0;
+  color: var(--text);
+}
+
+section p {
+  color: var(--text);
+  margin: 8px 0 12px 0;
+}
+
+section p.note {
+  color: var(--text-muted);
+  font-size: 14px;
+}
+
+figure {
+  margin: 20px 0;
+  padding: 0;
+}
+figure img {
+  display: block;
+  width: 100%;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow);
+}
+figure figcaption {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin-top: 8px;
+  text-align: center;
+}
+
+ul, ol.steps {
+  padding-left: 22px;
+}
+ul li, ol.steps li {
+  margin: 4px 0;
+}
+
+code, kbd {
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 0.88em;
+  padding: 1px 6px;
+  background: var(--code-bg);
+  border: 1px solid var(--code-border);
+  border-radius: 4px;
+}
+kbd {
+  font-weight: 600;
+  color: var(--text);
+}
+
+pre {
+  background: var(--code-bg);
+  border: 1px solid var(--code-border);
+  border-radius: 8px;
+  padding: 14px 18px;
+  overflow-x: auto;
+  font-size: 13px;
+  line-height: 1.55;
+}
+pre code { border: none; padding: 0; background: none; }
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 16px 0;
+  font-size: 14px;
+}
+table th, table td {
+  text-align: left;
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--border);
+}
+table th {
+  background: var(--surface);
+  color: var(--text-muted);
+  font-weight: 600;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+table tr:hover td { background: var(--surface); }
+
+.callout {
+  border-left: 3px solid var(--accent);
+  background: var(--accent-soft);
+  padding: 12px 16px;
+  border-radius: 0 8px 8px 0;
+  margin: 16px 0;
+  font-size: 14px;
+  color: var(--text);
+}
+.callout.warn {
+  border-left-color: #d88a0f;
+  background: #fff3db;
+}
+@media (prefers-color-scheme: dark) {
+  .callout.warn { background: #2b2212; }
+}
+
+.grid-two {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin: 18px 0;
+}
+.grid-two figure { margin: 0; }
+
+/* Small screens — collapse sidebar into a top bar. */
+@media (max-width: 900px) {
+  .layout { flex-direction: column; }
+  aside.nav {
+    width: 100%;
+    max-height: none;
+    position: static;
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+  }
+  aside.nav ol {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+  main { padding: 32px 20px; }
+  header.hero h1 { font-size: 28px; }
+  .grid-two { grid-template-columns: 1fr; }
+}
