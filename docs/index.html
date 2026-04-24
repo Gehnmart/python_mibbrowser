@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>pymibbrowser — Qt SNMP MIB Browser для Linux</title>
+  <link rel="stylesheet" href="guide/style.css">
+  <style>
+    /* Landing-only overrides — re-uses the guide's CSS variables. */
+    main.landing {
+      max-width: 960px;
+      padding: 64px 48px;
+    }
+    header.hero h1 { font-size: 46px; }
+    .cta {
+      display: flex; gap: 12px; flex-wrap: wrap;
+      margin-top: 24px;
+    }
+    .cta a {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 12px 22px;
+      border-radius: 8px;
+      text-decoration: none;
+      font-weight: 600;
+      font-size: 15px;
+      transition: transform .15s, box-shadow .15s;
+    }
+    .cta a.primary {
+      background: linear-gradient(135deg, var(--accent) 0%, #5d8ac4 100%);
+      color: white;
+      box-shadow: 0 4px 14px rgba(44, 106, 160, .35);
+    }
+    .cta a.primary:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 6px 22px rgba(44, 106, 160, .45);
+    }
+    .cta a.secondary {
+      background: var(--surface);
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+    .cta a.secondary:hover { background: var(--surface-alt); }
+
+    .feature-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+      margin: 40px 0;
+    }
+    .feature {
+      padding: 20px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+    }
+    .feature .icon {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 38px; height: 38px;
+      border-radius: 8px;
+      background: var(--accent-soft);
+      color: var(--accent);
+      font-size: 20px;
+      margin-bottom: 12px;
+    }
+    .feature h3 { margin: 0 0 6px 0; font-size: 15px; }
+    .feature p  {
+      margin: 0; font-size: 13.5px; color: var(--text-muted);
+      line-height: 1.5;
+    }
+    @media (max-width: 700px) {
+      .feature-grid { grid-template-columns: 1fr; }
+      main.landing { padding: 36px 20px; }
+      header.hero h1 { font-size: 32px; }
+    }
+
+    .hero-screenshot {
+      margin: 40px 0 0 0;
+      border-radius: 12px;
+      overflow: hidden;
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow);
+    }
+    .hero-screenshot img { display: block; width: 100%; }
+
+    footer {
+      margin-top: 80px;
+      padding-top: 24px;
+      border-top: 1px solid var(--border);
+      color: var(--text-muted);
+      font-size: 13px;
+      text-align: center;
+    }
+    footer a { color: var(--accent); }
+  </style>
+</head>
+<body>
+
+<main class="landing">
+
+<header class="hero">
+  <h1>pymibbrowser</h1>
+  <p class="lead">
+    Qt-клиент SNMP MIB-браузера для Linux. Опрос устройств, приём и
+    отправка трапов, периодические поллы, наблюдения по порогам,
+    визуализация пропускной способности, сценарии на языке
+    SNMP-команд.
+  </p>
+  <div class="badges">
+    <span class="badge">Python 3.10+</span>
+    <span class="badge">PyQt6</span>
+    <span class="badge">pysnmp 7 / pysmi</span>
+    <span class="badge">SNMP v1 / v2c</span>
+    <span class="badge">MIT License</span>
+  </div>
+  <div class="cta">
+    <a class="primary" href="guide/">📖 Открыть руководство</a>
+    <a class="secondary"
+       href="https://github.com/Gehnmart/python_mibbrowser">
+      ⧉ Репозиторий на GitHub
+    </a>
+  </div>
+</header>
+
+<div class="hero-screenshot">
+  <img src="guide/screenshots/main_window_filled.png"
+       alt="pymibbrowser — главное окно после Walk по ifTable">
+</div>
+
+<!-- ============ Feature grid ============ -->
+
+<h2 style="margin-top: 56px; font-size: 22px;">Что внутри</h2>
+<div class="feature-grid">
+
+  <div class="feature">
+    <div class="icon">🌳</div>
+    <h3>Умное дерево MIB</h3>
+    <p>Цепочки одиночных папок сжимаются в один узел; фильтр с
+      поиском по описанию; autoresolve символьных имён.</p>
+  </div>
+
+  <div class="feature">
+    <div class="icon">📊</div>
+    <h3>Live-графики и Port View</h3>
+    <p>pyqtgraph с rate-режимом; 64-битные ifHC-счётчики; плитки
+      интерфейсов с up/down-индикацией и throughput.</p>
+  </div>
+
+  <div class="feature">
+    <div class="icon">🔔</div>
+    <h3>Trap Receiver и Sender</h3>
+    <p>Правила с Run command / Play sound; CIDR accept-list; hex-dump
+      сырого PDU для отладки.</p>
+  </div>
+
+  <div class="feature">
+    <div class="icon">⏱</div>
+    <h3>Polls и Watches</h3>
+    <p>Периодические опросы по списку агентов, предикаты по порогам
+      со stateful-журналом переходов.</p>
+  </div>
+
+  <div class="feature">
+    <div class="icon">💾</div>
+    <h3>Offline-диагностика</h3>
+    <p>Save walk в snmpwalk-формат, Agent Simulator для mock-устройства,
+      Compare для diff'а двух снимков.</p>
+  </div>
+
+  <div class="feature">
+    <div class="icon">🛠</div>
+    <h3>Инструменты сети</h3>
+    <p>Ping, Traceroute, Network Discovery с sysName/sysDescr
+      и bulk-добавлением в список агентов.</p>
+  </div>
+
+  <div class="feature">
+    <div class="icon">📝</div>
+    <h3>Скрипты</h3>
+    <p>iReasoning-стиль: get / walk / set / sleep / if / save.
+      Редактор с reference-вкладкой и примерами.</p>
+  </div>
+
+  <div class="feature">
+    <div class="icon">🔍</div>
+    <h3>Device Snapshot</h3>
+    <p>Один клик — sysInfo + ifTable + HOST-RESOURCES-MIB в
+      удобных панелях.</p>
+  </div>
+
+  <div class="feature">
+    <div class="icon">🧰</div>
+    <h3>Portable build</h3>
+    <p>PyInstaller-tarball ~80 МБ, запускается без системного Python.
+      CI через GitHub Actions на Python 3.10 + 3.12.</p>
+  </div>
+
+</div>
+
+<!-- ============ Quick install ============ -->
+
+<h2 style="font-size: 22px;">Быстрая установка</h2>
+<pre><code>git clone https://github.com/Gehnmart/python_mibbrowser.git
+cd python_mibbrowser
+./run.sh           # первый запуск: создаст .venv и скомпилирует MIBs
+</code></pre>
+
+<p class="note">
+  Для готовой портативной сборки:
+  <code>./build.sh</code> → <code>dist/pymibbrowser-linux-x86_64/</code>
+  (≈&nbsp;80&nbsp;МБ запакованного).
+</p>
+
+<!-- ============ Footer ============ -->
+
+<footer>
+  <p>
+    Руководство:
+    <a href="guide/">docs/guide</a> ·
+    Issues:
+    <a href="https://github.com/Gehnmart/python_mibbrowser/issues">GitHub</a> ·
+    MIT License
+  </p>
+</footer>
+
+</main>
+
+</body>
+</html>
