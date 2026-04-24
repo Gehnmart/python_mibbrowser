@@ -91,6 +91,69 @@ def wait_if_running(thread, ms: int = 800) -> None:
         pass
 
 
+def shutdown_pools(pools: list[list], total_ms: int = 500) -> None:
+    """Fast shutdown of several thread pools.
+
+    Why not just call wait_if_running on each thread? Because that
+    serialises: 9 Port-View walks × 500 ms each = 4.5 s felt by the
+    user on app close. Instead:
+
+      1. Flip `_cancel` on every worker (op_walk notices next iteration,
+         op_get/op_next are stuck in pysnmp's blocking socket but will
+         emit failed→quit as soon as the UDP timeout expires).
+      2. Call requestInterruption on each thread — pysnmp ignores it,
+         but custom workers may check it.
+      3. Poll at 50 ms intervals for `total_ms` total. Threads that
+         finish early free us to close faster; stragglers are detached.
+
+    Detached QThreads finish in the background. Our `thread.finished`
+    handlers use deleteLater so they tear themselves down cleanly even
+    after the parent window has gone — Qt auto-disconnects signal
+    targets that no longer exist."""
+    import time
+
+    from PyQt6.sip import isdeleted
+    threads: list = []
+    for pool in pools:
+        for t in list(pool):
+            try:
+                if isdeleted(t):
+                    continue
+                # Tell its worker to bail at next opportunity.
+                worker = getattr(t, "_worker_ref", None)
+                if worker is not None and hasattr(worker, "cancel"):
+                    try:
+                        worker.cancel()
+                    except Exception:
+                        pass
+                try:
+                    t.requestInterruption()
+                except Exception:
+                    pass
+                if t.isRunning():
+                    threads.append(t)
+            except (RuntimeError, TypeError):
+                continue
+
+    if not threads:
+        return
+    # Poll until either all threads finished or the budget elapses.
+    deadline = time.monotonic() + total_ms / 1000.0
+    step = 0.05   # 50 ms
+    while time.monotonic() < deadline:
+        still_running = False
+        for t in threads:
+            try:
+                if not isdeleted(t) and t.isRunning():
+                    still_running = True
+                    break
+            except (RuntimeError, TypeError):
+                continue
+        if not still_running:
+            return
+        time.sleep(step)
+
+
 def prune_threads(pool: list) -> None:
     """Drop refs to QThread objects that have already finished.
 
