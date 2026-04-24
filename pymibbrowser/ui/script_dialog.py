@@ -127,11 +127,20 @@ class _ScriptWorker(QObject):
         self._path = path
         self._agent = agent
         self._tree = tree
+        self._cancel = False
+
+    def cancel(self) -> None:
+        """Break the script runner out of its loop (and out of any
+        'sleep N' it's currently in) at the next 100-ms check."""
+        self._cancel = True
 
     def run(self) -> None:
         try:
-            script_runner.run(self._path, self._agent, self._tree,
-                              logger=lambda s: self.line.emit(s))
+            script_runner.run(
+                self._path, self._agent, self._tree,
+                logger=lambda s: self.line.emit(s),
+                should_cancel=lambda: self._cancel,
+            )
             self.done.emit()
         except Exception as exc:
             self.failed.emit(str(exc))
@@ -346,3 +355,16 @@ class ScriptDialog(QDialog):
     def _on_failed(self, msg: str) -> None:
         self.run_b.setEnabled(True)
         self.output.appendPlainText("!!! " + _t("Script failed") + ": " + msg)
+
+    def closeEvent(self, ev) -> None:
+        """Cancel an in-flight script so closing the dialog doesn't
+        leave a QThread blocked in `sleep 3600`."""
+        from .. import workers
+        if self._worker is not None:
+            try:
+                self._worker.cancel()
+            except Exception:
+                pass
+        if self._thread is not None:
+            workers.wait_if_running(self._thread, 500)
+        super().closeEvent(ev)

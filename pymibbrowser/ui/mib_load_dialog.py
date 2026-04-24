@@ -48,6 +48,12 @@ class _CompileWorker(QObject):
         self._modules = modules
         self._extra = extra_dirs
         self._network = use_network
+        self._cancel = False
+
+    def cancel(self) -> None:
+        """Check between modules; we can't stop pysmi mid-compile of
+        one file, but we can refuse to start the next one."""
+        self._cancel = True
 
     def run(self) -> None:
         try:
@@ -61,6 +67,8 @@ class _CompileWorker(QObject):
             merged: dict = {}
             total = len(self._modules)
             for i, mod in enumerate(self._modules, 1):
+                if self._cancel:
+                    break
                 try:
                     res = compiler.compile(mod, rebuild=True, genTexts=True,
                                            ignoreErrors=True)
@@ -216,6 +224,20 @@ class MibLoadDialog(QDialog):
     def _on_failed(self, msg: str) -> None:
         self.status_lbl.setText(f"Error: {msg}")
         QMessageBox.critical(self, _t("Load MIB…"), msg)
+
+    def closeEvent(self, ev) -> None:
+        """Ask the compile worker to bail between modules so the dialog
+        can close even when pysmi is grinding through a 50-module MIB
+        bundle."""
+        from .. import workers
+        if self._active is not None:
+            t, w = self._active
+            try:
+                w.cancel()
+            except Exception:
+                pass
+            workers.wait_if_running(t, 800)
+        super().closeEvent(ev)
 
     def _on_finished_cleanup(self) -> None:
         self._active = None

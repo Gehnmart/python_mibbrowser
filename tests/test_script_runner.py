@@ -103,14 +103,16 @@ def test_set_parses_triples(tmp_path, stub_snmp, tree):
 
 def test_if_fires_action_when_matches(tmp_path, stub_snmp, tree,
                                        monkeypatch):
-    # The first get returns "100"; 'if $ > 50 sleep 0' triggers.
+    # The first get returns "100"; 'if $ > 50 sleep 1' triggers.
+    # (sleep 0 wouldn't enter the interruptible loop at all.)
     sleeps: list[float] = []
     monkeypatch.setattr(script_runner.time, "sleep",
                         lambda s: sleeps.append(s))
     _run(tmp_path,
          "get 127.0.0.1 sysUpTime.0\n"
-         "if $ > 50 sleep 0\n", tree)
-    assert sleeps == [0.0]
+         "if $ > 50 sleep 1\n", tree)
+    # interruptible_sleep breaks the total into 0.1-sec chunks.
+    assert sleeps and abs(sum(sleeps) - 1.0) < 1e-6
 
 
 def test_if_does_not_fire_when_condition_false(tmp_path, stub_snmp,
@@ -130,4 +132,34 @@ def test_sleep_blocks_monkeypatched(tmp_path, stub_snmp, tree,
     monkeypatch.setattr(script_runner.time, "sleep",
                         lambda s: sleeps.append(s))
     _run(tmp_path, "sleep 0.25\n", tree)
-    assert sleeps == [0.25]
+    # Total slept ≈ 0.25 (but chunked into 0.1 + 0.1 + 0.05 to stay
+    # cancellable).
+    assert abs(sum(sleeps) - 0.25) < 1e-6
+
+
+def test_cancel_breaks_out_of_sleep(tmp_path, stub_snmp, tree,
+                                     monkeypatch):
+    # Simulate a user-cancel mid-sleep. We monkeypatch time.sleep to
+    # set the cancel flag after the first chunk; the script should
+    # abort with a [cancelled] log line and not run the next command.
+    from pymibbrowser import script_runner as sr
+    cancelled_flag = {"v": False}
+
+    sleeps: list[float] = []
+    def fake_sleep(s):
+        sleeps.append(s)
+        cancelled_flag["v"] = True   # cancel after first chunk
+    monkeypatch.setattr(sr.time, "sleep", fake_sleep)
+
+    script = tmp_path / "s.txt"
+    script.write_text("sleep 5\nget 127.0.0.1 sysUpTime.0\n")
+    log: list[str] = []
+    sr.run(str(script), Agent(host="127.0.0.1"), tree,
+           logger=log.append,
+           should_cancel=lambda: cancelled_flag["v"])
+
+    # Only the first 0.1 chunk fired, the rest of the 5-sec sleep was
+    # skipped, and the subsequent `get` never ran.
+    assert len(sleeps) == 1
+    assert any("[cancelled]" in ln for ln in log)
+    assert not stub_snmp["get"]

@@ -27,12 +27,29 @@ def _parse_host(spec: str, default_port: int) -> tuple[str, int]:
 
 
 def run(path: str, agent: Agent, tree: MibTree,
-        logger: Callable[[str], None] | None = None) -> None:
+        logger: Callable[[str], None] | None = None,
+        should_cancel: Callable[[], bool] | None = None) -> None:
     def log(msg: str) -> None:
         if logger is not None:
             logger(msg)
         else:
             print(msg)
+
+    def cancelled() -> bool:
+        return should_cancel() if should_cancel is not None else False
+
+    def interruptible_sleep(total: float) -> None:
+        """time.sleep that wakes up every 100 ms to check should_cancel.
+        Lets the caller bail out of `sleep 3600` within a tenth of a
+        second instead of waiting an hour at close time."""
+        step = 0.1
+        remaining = total
+        while remaining > 0:
+            if cancelled():
+                return
+            chunk = step if remaining > step else remaining
+            time.sleep(chunk)
+            remaining -= chunk
 
     last_result = None
     last_error = 0
@@ -54,6 +71,12 @@ def run(path: str, agent: Agent, tree: MibTree,
         log(f"saved {len(save_buffer)} line(s) to {p}")
 
     for raw_line in Path(path).read_text().splitlines():
+        # Bail between commands too — not just during sleep. Long SNMP
+        # ops (big walks) go through pysnmp which we can't interrupt,
+        # but at least the script stops scheduling new ones.
+        if cancelled():
+            log("[cancelled]")
+            break
         line = raw_line.strip()
         if not line or line.startswith("#"):
             continue
@@ -91,14 +114,14 @@ def run(path: str, agent: Agent, tree: MibTree,
                     log(f"[email action → {arg}] (SMTP not configured, skipped)")
                 elif action == "sleep":
                     try:
-                        time.sleep(float(arg))
+                        interruptible_sleep(float(arg))
                     except Exception:
                         pass
             continue
 
         if op == "sleep":
             try:
-                time.sleep(float(parts[1]))
+                interruptible_sleep(float(parts[1]))
             except Exception as exc:
                 log(f"bad sleep: {exc}")
             continue
