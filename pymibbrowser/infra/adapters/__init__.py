@@ -8,6 +8,7 @@ interesting belongs in either the engine or the underlying infra module.
 from .clock import WallClock
 from .file_sink import FileSink, NullSink
 from .logger import CallbackLogger, PrintLogger
+from .mib_store import MibTreeStore
 from .resolver import MibTreeResolver, NumericResolver
 from .snmp import PysnmpTransport
 
@@ -18,6 +19,7 @@ __all__ = [
     "CallbackLogger",
     "PrintLogger",
     "MibTreeResolver",
+    "MibTreeStore",
     "NumericResolver",
     "PysnmpTransport",
 ]

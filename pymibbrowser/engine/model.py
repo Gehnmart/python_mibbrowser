@@ -38,3 +38,20 @@ class VarBind:
     oid: tuple[int, ...]
     type_name: str          # transport-defined label (e.g. "TimeTicks")
     display_value: str      # human-readable string the engine prints
+
+
+@dataclass(frozen=True)
+class MibNodeView:
+    """Read-only view of a MIB node — what callers need to render or
+    inspect a node without importing infra types. Adapters materialise
+    this from their concrete representation (e.g. infra.MibNode)."""
+
+    name: str
+    oid: tuple[int, ...]
+    module: str = ""
+    syntax: str = ""              # SMI type name (Integer32, OCTET STRING, ...)
+    access: str = ""              # read-only / read-write / ...
+    description: str = ""
+    units: str = ""
+    indices: tuple[str, ...] = ()
+    enum_values: tuple[tuple[int, str], ...] = ()

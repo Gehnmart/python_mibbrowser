@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import Protocol
 
-from .model import Agent, VarBind
+from .model import Agent, MibNodeView, VarBind
 
 
 class SnmpTransport(Protocol):
@@ -60,3 +60,32 @@ class OutputSink(Protocol):
     def emit(self, line: str) -> None: ...
 
     def close(self) -> None: ...
+
+
+class MibStore(Protocol):
+    """Application-level view of the MIB catalogue.
+
+    Lets non-UI consumers (CLI, web frontend, scripts) work with MIB
+    modules without importing infra types. The resolver() return value
+    is the engine's ``Resolver`` — same Protocol, freshly bound to the
+    current tree state, so it stays valid across set_enabled() rebuilds."""
+
+    def resolver(self) -> "Resolver": ...
+
+    def available_modules(self) -> list[str]:
+        """Every module the store knows about, whether enabled or not.
+        Sorted, no duplicates."""
+
+    def enabled_modules(self) -> list[str]:
+        """Module names currently merged into the resolver's tree.
+        Subset of available_modules(). Sorted."""
+
+    def set_enabled(self, modules: list[str]) -> None:
+        """Re-merge the tree with only the given modules. Modules not in
+        ``available_modules()`` are silently ignored — same forgiving
+        contract as the underlying loader."""
+
+    def find_node(self, oid: tuple[int, ...]) -> MibNodeView | None:
+        """Nearest named ancestor for a numeric OID, as a read-only view.
+        Returns None only if the OID is shorter than any known node
+        (i.e. nothing in the tree at all)."""
