@@ -40,7 +40,7 @@ from PyQt6.QtWidgets import (
 )
 
 from .. import workers
-from ..infra import snmp_ops
+from ..infra import config, snmp_ops
 from ..infra.config import Agent
 from ..infra.i18n import _t
 

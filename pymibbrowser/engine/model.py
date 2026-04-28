@@ -114,7 +114,7 @@ class AppSettings:
     default_agent: Agent = field(default_factory=Agent)
     saved_agents: list[Agent] = field(default_factory=list)
     loaded_mibs: list[str] = field(default_factory=list)
-    bookmarks: list[dict] = field(default_factory=list)
+    bookmarks: list[dict[str, str]] = field(default_factory=list)
     trap_port: int = 162
     max_graph_points: int = 600
     single_tree_root: bool = True

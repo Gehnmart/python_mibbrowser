@@ -12,7 +12,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from ...engine.model import MibNodeView
-from ..mib_loader import MibTree
+from ..mib_loader import MibNode, MibTree
 
 
 class _DynamicResolver:
@@ -27,7 +27,7 @@ class _DynamicResolver:
         return self._store._tree.resolve_name(name_or_oid)
 
 
-def _node_to_view(n) -> MibNodeView:
+def _node_to_view(n: MibNode) -> MibNodeView:
     return MibNodeView(
         name=n.name,
         oid=n.oid,

@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from typing import Any
 
@@ -408,10 +408,27 @@ def _run(coro):
             loop.close()
 
 
-def op_get(agent, oids):        return _run(async_get(agent, oids))
-def op_next(agent, oids):       return _run(async_next(agent, oids))
-def op_bulk(agent, oids):       return _run(async_bulk(agent, oids))
-def op_walk(agent, oid, cb=None): return _run(async_walk(agent, oid, cb))
-def op_set(agent, pairs):       return _run(async_set(agent, pairs))
-def op_table_walk(agent, col_oids, cb=None):
+def op_get(agent: Agent, oids: list) -> list[VarBind]:
+    return _run(async_get(agent, oids))
+
+
+def op_next(agent: Agent, oids: list) -> list[VarBind]:
+    return _run(async_next(agent, oids))
+
+
+def op_bulk(agent: Agent, oids: list) -> list[VarBind]:
+    return _run(async_bulk(agent, oids))
+
+
+def op_walk(agent: Agent, oid: str | Iterable[int],
+            cb: Callable[[VarBind], None] | None = None) -> list[VarBind]:
+    return _run(async_walk(agent, oid, cb))
+
+
+def op_set(agent: Agent, pairs: list[tuple[str, Any]]) -> list[VarBind]:
+    return _run(async_set(agent, pairs))
+
+
+def op_table_walk(agent: Agent, col_oids: list[tuple[int, ...]],
+                  cb: Callable[[VarBind], None] | None = None) -> list[VarBind]:
     return _run(async_table_walk(agent, col_oids, cb))

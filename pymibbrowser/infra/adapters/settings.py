@@ -8,8 +8,10 @@ from __future__ import annotations
 
 import dataclasses
 import json
+from collections.abc import Callable
 from dataclasses import asdict
 from pathlib import Path
+from typing import Any
 
 from ...engine.model import (
     Agent,
@@ -23,7 +25,7 @@ from ..config import config_dir
 
 # Custom reconstructors for dataclass-typed fields. Plain fields
 # (str/int/bool/list[str]/dict) are handled generically below.
-_NESTED_LOADERS = {
+_NESTED_LOADERS: dict[str, Callable[[Any], Any]] = {
     "current_agent": lambda v: Agent(**(v or {})),
     "default_agent": lambda v: Agent(**(v or {})),
     "saved_agents":  lambda v: [Agent(**a) for a in (v or [])

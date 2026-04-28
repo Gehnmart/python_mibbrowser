@@ -17,6 +17,7 @@ from PyQt6.QtWidgets import (
     QVBoxLayout,
 )
 
+from ..infra import config
 from ..infra.config import Agent, AppSettings
 from ..infra.i18n import _t
 
