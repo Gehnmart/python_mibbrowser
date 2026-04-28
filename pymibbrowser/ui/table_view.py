@@ -23,6 +23,7 @@ from .. import workers
 from ..infra import snmp_ops
 from ..infra.config import Agent
 from ..infra.i18n import _t
+from ..infra.index_parser import parse_index_suffix
 from ..infra.mib_loader import MibTree
 
 
@@ -286,7 +287,7 @@ class TableViewTab(QWidget):
         index_names = self.entry.indices or []
         implied = bool(getattr(self.entry, "implied_last_index", False))
         for suf, row in rows_by_suffix.items():
-            parsed = self._parse_index_suffix(index_names, suf, implied)
+            parsed = parse_index_suffix(self.tree, index_names, suf, implied)
             for name, val in parsed.items():
                 ci = col_by_name.get(name)
                 if ci is not None and not row[ci]:
@@ -301,133 +302,6 @@ class TableViewTab(QWidget):
             rows.append(vals)
             idx_labels.append(".".join(str(p) for p in suf))
         self.model.set_data(rows, idx_labels)
-
-    # SMI types used as table indices. These are all textual conventions
-    # ultimately resolving to a small set of base encodings.
-    _OCTET_LIKE_INDEX = (
-        "octetstring", "display", "string",
-        "inetaddress",           # RFC 4001: length-prefixed octet string
-        "physaddress", "mac",    # physical addr: length-prefixed
-        "bits",
-    )
-    _IPV4_INDEX = ("ipaddress",)
-    _OID_LIKE_INDEX = ("objectidentifier", "objectname")
-
-    def _parse_index_suffix(self, index_names: list[str],
-                            suffix: tuple[int, ...],
-                            last_implied: bool = False) -> dict[str, str]:
-        """
-        Decompose an OID suffix into {index-column-name: rendered-value}.
-
-        Recognises base SMI encodings plus several common textual conventions:
-          - IpAddress            : exactly 4 suffix elements, dotted quad
-          - InetAddressType      : INTEGER enum (1 element) — translated via
-                                   MIB enum_values
-          - InetAddress / OCTET STRING / PhysAddress : length-prefixed
-          - OID                  : length-prefixed
-          - INTEGER-family       : 1 element
-        """
-        out: dict[str, str] = {}
-        remaining = list(suffix)
-        last_addr_type: int | None = None  # IPv4 vs IPv6 from InetAddressType
-
-        total = len(index_names)
-        for pos, name in enumerate(index_names):
-            is_last = pos == total - 1
-            node = self.tree.node_by_name(name)
-            if node is None or not remaining:
-                break
-            syntax = (node.syntax or "").lower()
-
-            # Enum-carrying INTEGERs (e.g. InetAddressType whose syntax is the
-            # textual convention name, not "INTEGER") must be matched BEFORE
-            # the octet-like branch — otherwise "InetAddressType" collides
-            # with the "inetaddress" substring check below.
-            if node.enum_values or syntax.endswith("type"):
-                value = remaining.pop(0)
-                out[name] = node.enum_values.get(value, str(value)) \
-                    if node.enum_values else str(value)
-                if "addresstype" in syntax or name.lower().endswith("addresstype"):
-                    last_addr_type = value
-                continue
-
-            if any(k in syntax for k in self._IPV4_INDEX):
-                if len(remaining) < 4:
-                    break
-                out[name] = ".".join(str(p) for p in remaining[:4])
-                remaining = remaining[4:]
-                continue
-
-            if any(k in syntax for k in self._OCTET_LIKE_INDEX):
-                # Length-prefixed unless this is the LAST index and the row
-                # declaration says IMPLIED (RFC 2578 §7.7) — then the suffix
-                # is just the raw bytes with no leading length byte.
-                if is_last and last_implied:
-                    raw_bytes = remaining
-                    remaining = []
-                else:
-                    length = remaining.pop(0)
-                    if len(remaining) < length:
-                        break
-                    raw_bytes = remaining[:length]
-                    remaining = remaining[length:]
-                out[name] = self._render_octet_index(
-                    name, syntax, raw_bytes, last_addr_type)
-                continue
-
-            if any(k in syntax for k in self._OID_LIKE_INDEX):
-                if is_last and last_implied:
-                    parts = remaining
-                    remaining = []
-                else:
-                    length = remaining.pop(0)
-                    if len(remaining) < length:
-                        break
-                    parts = remaining[:length]
-                    remaining = remaining[length:]
-                out[name] = "." + ".".join(str(p) for p in parts)
-                continue
-
-            # Default: one-element integer (INTEGER, Integer32, Unsigned32,
-            # Counter*, Gauge*, TimeTicks, InetPortNumber, InetAddressType…).
-            value = remaining.pop(0)
-            if node.enum_values and value in node.enum_values:
-                out[name] = node.enum_values[value]
-            else:
-                out[name] = str(value)
-            # Remember the IP family so the following InetAddress renders
-            # as IPv4 vs IPv6.
-            if "addresstype" in syntax or name.lower().endswith("addresstype"):
-                last_addr_type = value
-        return out
-
-    @staticmethod
-    def _render_octet_index(name: str, syntax: str,
-                            raw: list[int],
-                            addr_type: int | None) -> str:
-        # InetAddress disambiguation: type 1=ipv4, 2=ipv6, 3=ipv4z, 4=ipv6z,
-        # 16=dns. Use addr_type carried from preceding InetAddressType index.
-        if "inetaddress" in syntax:
-            if addr_type in (1, 3) and len(raw) >= 4:
-                return ".".join(str(b) for b in raw[:4])
-            if addr_type in (2, 4) and len(raw) >= 16:
-                hexes = [f"{raw[i]:02x}{raw[i + 1]:02x}"
-                         for i in range(0, 16, 2)]
-                return ":".join(hexes)
-            # Fallback by length alone
-            if len(raw) == 4:
-                return ".".join(str(b) for b in raw)
-            if len(raw) == 16:
-                hexes = [f"{raw[i]:02x}{raw[i + 1]:02x}"
-                         for i in range(0, 16, 2)]
-                return ":".join(hexes)
-        if "physaddress" in syntax or "mac" in syntax:
-            return ":".join(f"{b:02X}" for b in raw)
-        # Display-string / OCTET STRING
-        b = bytes(raw)
-        if all(32 <= c < 127 for c in b):
-            return b.decode("latin-1")
-        return " ".join(f"{c:02X}" for c in raw)
 
     def _export(self) -> None:
         path, _ = QFileDialog.getSaveFileName(self, "Export table", "table.csv",
