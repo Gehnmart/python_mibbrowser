@@ -138,8 +138,18 @@ def _build_auth(agent: Agent, for_write: bool = False):
         mp = 0 if agent.version == "1" else 1
         return CommunityData(community, mpModel=mp)
     # v3
-    auth = AUTH_PROTOS.get(agent.auth_protocol.lower(), usmNoAuthProtocol)
-    priv = PRIV_PROTOS.get(agent.priv_protocol.lower(), usmNoPrivProtocol)
+    auth_name = (agent.auth_protocol or "none").lower()
+    priv_name = (agent.priv_protocol or "none").lower()
+    # SNMPv3 spec: noAuthPriv is invalid — encryption requires
+    # authentication. pysnmp surfaces this as an opaque internal
+    # exception inside the engine; raising up front gives the user
+    # an error they can act on (set auth too, or turn priv off).
+    if auth_name == "none" and priv_name != "none":
+        raise SnmpError(
+            "SNMPv3: privacy requires authentication "
+            f"(auth={agent.auth_protocol!r}, priv={agent.priv_protocol!r})")
+    auth = AUTH_PROTOS.get(auth_name, usmNoAuthProtocol)
+    priv = PRIV_PROTOS.get(priv_name, usmNoPrivProtocol)
     return UsmUserData(
         agent.user,
         agent.auth_password or None,
@@ -319,6 +329,7 @@ async def async_walk(agent: Agent, root: str | Iterable[int],
 
     results: list[VarBind] = []
     current = start
+    last_oid: tuple[int, ...] | None = None
     try:
         while True:
             err_ind, err_stat, err_idx, vbs = await next_cmd(
@@ -337,6 +348,18 @@ async def async_walk(agent: Agent, root: str | Iterable[int],
             vb = VarBind.from_pysnmp(name, val)
             if root_tuple and vb.oid[: len(root_tuple)] != root_tuple:
                 break
+            # Lexicographic-order guard. A well-behaved agent always
+            # advances the OID; a broken one (some old Cisco IOS, some
+            # vendor agents under load) can echo the previous OID or
+            # walk backwards. Without this check the loop runs until
+            # the user's QThread is killed.
+            if last_oid is not None and vb.oid <= last_oid:
+                log.warning(
+                    "walk: agent %s returned non-monotonic OID "
+                    "%s after %s — stopping to avoid infinite loop",
+                    agent.host, vb.oid, last_oid)
+                break
+            last_oid = vb.oid
             results.append(vb)
             if on_progress is not None:
                 on_progress(vb)
@@ -360,16 +383,32 @@ _TYPE_TAGS: dict[str, type] = {
 
 
 def build_set_value(type_tag: str, text: str):
+    """Encode (type_tag, text) into the matching rfc1902 type.
+
+    Wraps pyasn1's constraint errors as SnmpError so callers see a
+    diagnostic with the offending value and tag instead of a raw
+    pyasn1 traceback ("ValueConstraintError: 'abc' is not in range
+    …" hidden three levels deep).
+    """
     t = (type_tag or "s").lower()
     cls = _TYPE_TAGS.get(t, rfc1902.OctetString)
-    if t == "x":
-        hex_str = text.replace(" ", "").replace("0x", "").replace("0X", "")
-        return rfc1902.OctetString(hexValue=hex_str)
-    if t == "o":
-        return rfc1902.ObjectName(text.strip().lstrip("."))
-    if t == "s":
-        return rfc1902.OctetString(text)
-    return cls(text)
+    try:
+        if t == "x":
+            hex_str = text.replace(" ", "").replace("0x", "").replace("0X", "")
+            return rfc1902.OctetString(hexValue=hex_str)
+        if t == "o":
+            return rfc1902.ObjectName(text.strip().lstrip("."))
+        if t == "s":
+            return rfc1902.OctetString(text)
+        # Numeric / address types — pyasn1 enforces the constraint at
+        # construction. Catch broadly: pyasn1 raises a small zoo of
+        # ValueConstraintError / TypeError / ValueError variants.
+        return cls(text)
+    except SnmpError:
+        raise
+    except Exception as exc:
+        raise SnmpError(
+            f"bad value {text!r} for type tag {type_tag!r}: {exc}") from exc
 
 
 async def async_set(agent: Agent, pairs: list[tuple[str, Any]]) -> list[VarBind]:
@@ -464,7 +503,13 @@ class _LoopRunner:
     def shutdown(self) -> None:
         """Stop the loop and join the thread. Idempotent. Tests use
         this for clean teardown; production never calls it (the
-        daemon thread dies with the process)."""
+        daemon thread dies with the process).
+
+        Cancels any pending tasks before stopping so an in-flight
+        ``next_cmd`` (or other pysnmp coroutine) doesn't leave the
+        loop's selector in a half-closed state — manifests as
+        ``RuntimeWarning: coroutine ... was never awaited`` and
+        leaked socket FDs in long-running test sessions."""
         with self._lock:
             loop = self._loop
             thread = self._thread
@@ -472,7 +517,13 @@ class _LoopRunner:
             self._thread = None
         if loop is None:
             return
-        loop.call_soon_threadsafe(loop.stop)
+
+        def _cancel_and_stop() -> None:
+            for task in asyncio.all_tasks(loop):
+                task.cancel()
+            loop.stop()
+
+        loop.call_soon_threadsafe(_cancel_and_stop)
         if thread is not None:
             thread.join(timeout=2.0)
         try:

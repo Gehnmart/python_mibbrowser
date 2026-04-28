@@ -174,6 +174,54 @@ def test_op_walk_error_indication(agent, fake_engine, monkeypatch):
         snmp_ops.op_walk(agent, ".1.3.6.1")
 
 
+def test_op_walk_breaks_on_non_monotonic_oid(agent, fake_engine, monkeypatch,
+                                                caplog):
+    """A misbehaving agent that re-issues the same OID (or worse, walks
+    backwards) used to spin forever — only the user killing the QThread
+    stopped it. The monotonicity guard logs and breaks instead."""
+    rounds = iter([
+        [_vb("1.3.6.1.2.1.1.1.0", rfc1902.OctetString(b"a"))],
+        [_vb("1.3.6.1.2.1.1.2.0", rfc1902.OctetString(b"b"))],
+        # Agent echoes the previous OID — no progress.
+        [_vb("1.3.6.1.2.1.1.2.0", rfc1902.OctetString(b"again"))],
+        # If the guard didn't fire, we'd consume more — but the iter
+        # is exhausted, so a missing guard would surface as
+        # StopIteration instead of an infinite loop in this test.
+    ])
+
+    async def fake_next(*_a, **_kw):
+        return None, 0, 0, next(rounds)
+    monkeypatch.setattr(snmp_ops, "next_cmd", fake_next)
+    monkeypatch.setattr(snmp_ops, "is_end_of_mib", lambda _x: False)
+
+    with caplog.at_level("WARNING"):
+        out = snmp_ops.op_walk(agent, ".1.3.6.1.2.1.1")
+    # Walk stopped at the second result (the third was rejected).
+    assert [vb.oid for vb in out] == [
+        (1, 3, 6, 1, 2, 1, 1, 1, 0),
+        (1, 3, 6, 1, 2, 1, 1, 2, 0),
+    ]
+    assert any("non-monotonic" in r.message for r in caplog.records)
+
+
+def test_op_walk_breaks_on_oid_going_backwards(agent, fake_engine, monkeypatch):
+    """Stricter case — strictly-smaller OID after a valid one. Same
+    guard should catch it."""
+    rounds = iter([
+        [_vb("1.3.6.1.2.1.1.5.0", rfc1902.OctetString(b"first"))],
+        # Goes backwards.
+        [_vb("1.3.6.1.2.1.1.3.0", rfc1902.OctetString(b"back"))],
+    ])
+
+    async def fake_next(*_a, **_kw):
+        return None, 0, 0, next(rounds)
+    monkeypatch.setattr(snmp_ops, "next_cmd", fake_next)
+    monkeypatch.setattr(snmp_ops, "is_end_of_mib", lambda _x: False)
+
+    out = snmp_ops.op_walk(agent, ".1.3.6.1.2.1.1")
+    assert [vb.oid for vb in out] == [(1, 3, 6, 1, 2, 1, 1, 5, 0)]
+
+
 # --- async_table_walk -----------------------------------------------------
 
 def test_table_walk_no_columns_returns_empty(agent, fake_engine):

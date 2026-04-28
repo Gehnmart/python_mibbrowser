@@ -166,6 +166,26 @@ class TestBuildAuth:
         usm = _build_auth(a)
         assert usm.userName == "u"
 
+    def test_v3_priv_without_auth_raises(self):
+        """SNMPv3 spec forbids noAuthPriv — privacy keys are derived
+        from the auth credential, so encryption-without-auth has no
+        meaningful key. pysnmp surfaces this as an opaque internal
+        error; we want a clear, actionable diagnostic."""
+        a = Agent(version="3", user="u",
+                   auth_protocol="none",
+                   priv_protocol="aes",
+                   priv_password="pw")
+        with pytest.raises(SnmpError, match="privacy requires authentication"):
+            _build_auth(a)
+
+    def test_v3_no_auth_no_priv_ok(self):
+        """noAuthNoPriv is the legitimate degenerate case — used for
+        device discovery, public OIDs."""
+        a = Agent(version="3", user="u",
+                   auth_protocol="none", priv_protocol="none")
+        usm = _build_auth(a)
+        assert usm.userName == "u"
+
 
 # --- build_set_value ------------------------------------------------------
 
@@ -221,6 +241,24 @@ class TestBuildSetValue:
         v = build_set_value("I", "42")
         assert isinstance(v, rfc1902.Integer32)
 
+    def test_bad_value_for_integer_raises_snmp_error(self):
+        """Passing 'abc' for type tag 'i' used to bubble out a pyasn1
+        ValueConstraintError three frames deep. Now wrapped as
+        SnmpError so callers see the offending value and tag."""
+        with pytest.raises(SnmpError, match="bad value 'abc' for type tag 'i'"):
+            build_set_value("i", "abc")
+
+    def test_bad_hex_value_raises_snmp_error(self):
+        """Same wrapping for the hex-tag path."""
+        with pytest.raises(SnmpError, match="bad value 'not-hex'"):
+            build_set_value("x", "not-hex")
+
+    def test_oversized_integer_raises_snmp_error(self):
+        """pyasn1's range constraint on Integer32 (signed 32-bit) —
+        anything larger comes back wrapped, not as a raw pyasn1 error."""
+        with pytest.raises(SnmpError, match="bad value"):
+            build_set_value("i", "99999999999999999999")
+
 
 # --- SnmpError ------------------------------------------------------------
 
@@ -269,6 +307,35 @@ class TestRun:
         assert runner.submit(f()) == 1
         runner.shutdown()
         runner.shutdown()
+
+    def test_shutdown_cancels_pending_tasks(self):
+        """A coroutine left running on the loop (e.g. a stuck pysnmp
+        next_cmd that the calling QThread already abandoned) used to
+        keep the loop's selector half-alive — manifests as
+        'never awaited' RuntimeWarnings and leaked socket FDs in long
+        test sessions. shutdown() now cancels every pending task
+        before stopping the loop, so the loop thread joins cleanly
+        even with abandoned work in flight."""
+        import asyncio
+        import time
+        runner = snmp_ops._LoopRunner()
+        runner._ensure_started()
+        # Schedule a coroutine that would never finish on its own.
+        async def stuck():
+            await asyncio.sleep(60)
+        assert runner._loop is not None
+        asyncio.run_coroutine_threadsafe(stuck(), runner._loop)
+        # Give the loop a moment to actually start the task.
+        time.sleep(0.05)
+        t0 = time.monotonic()
+        runner.shutdown()
+        # Without the cancel-before-stop path, shutdown would either
+        # hang on join(timeout=2.0) or return at exactly the timeout.
+        # With it, the loop unwinds the cancelled task and exits
+        # run_forever well under that budget.
+        assert time.monotonic() - t0 < 1.0
+        # And the loop thread is gone.
+        assert runner._thread is None
 
     def test_submit_from_loop_thread_raises(self):
         """A coroutine running on the loop must not call _run() — that
