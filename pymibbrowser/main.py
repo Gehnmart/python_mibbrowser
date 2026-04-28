@@ -9,7 +9,7 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QApplication, QMessageBox, QProgressDialog
 
 from .infra import config, i18n, mib_loader
-from .infra.adapters import PysmiMibCompiler
+from .infra.adapters import MibTreeStore, PysmiMibCompiler
 
 
 def _setup_logging(log_path: Path) -> None:
@@ -74,7 +74,6 @@ def main() -> int:
             return 1
         dlg.close()
 
-    tree = mib_loader.MibTree()
     # First-run default: hide vendor/enterprise MIBs. They're compiled and
     # present on disk — just not merged into the tree until the user opts
     # into them from File → MIB Modules. Persist the resolved list so the
@@ -82,11 +81,11 @@ def main() -> int:
     if settings.enabled_mibs is None:
         settings.enabled_mibs = mib_loader.MibTree.default_enabled_modules(compiled)
         settings.save()
-    tree.load_compiled(compiled, enabled=settings.enabled_mibs)
+    store = MibTreeStore(compiled, enabled=settings.enabled_mibs)
 
     # Import late so the Qt app exists first.
     from .ui.main_window import MibBrowserWindow
-    w = MibBrowserWindow(tree, settings)
+    w = MibBrowserWindow(store, settings)
     w.show()
 
     return app.exec()

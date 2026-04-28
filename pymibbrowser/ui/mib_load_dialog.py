@@ -57,26 +57,26 @@ class _CompileWorker(QObject):
 
     def run(self) -> None:
         try:
-            # compile_modules uses one big .compile(*mods) call which doesn't
-            # emit per-module progress. Loop ourselves so we can report.
-            from pymibbrowser.infra import config, mib_loader
-            dest = config.compiled_mibs_dir()
-            src_dirs = [*list(self._extra), config.default_mibs_src()]
-            compiler = mib_loader._make_compiler(
-                src_dirs, dest, use_network=self._network)
-            merged: dict = {}
-            total = len(self._modules)
-            for i, mod in enumerate(self._modules, 1):
-                if self._cancel:
-                    break
-                try:
-                    res = compiler.compile(mod, rebuild=True, genTexts=True,
-                                           ignoreErrors=True)
-                except Exception as exc:
-                    res = {mod: f"failed: {exc}"}
-                merged.update(res)
-                self.progress.emit(mod, str(res.get(mod, "")), i, total)
-            self.done.emit(dict(merged))
+            # The per-module loop, cancellation, and progress reporting
+            # all live in the PysmiMibCompiler adapter now. We just
+            # consume the port and translate engine.CompileResult into
+            # the Qt signal the dialog already wires up.
+            from pymibbrowser.infra import config
+            from pymibbrowser.infra.adapters import PysmiMibCompiler
+            compiler = PysmiMibCompiler(config.compiled_mibs_dir())
+            sources = [*self._extra, config.default_mibs_src()]
+            results = compiler.compile(
+                self._modules, sources,
+                rebuild=True,
+                use_network=self._network,
+                on_progress=lambda r, i, n:
+                    self.progress.emit(r.module, r.status, i, n),
+                should_cancel=lambda: self._cancel,
+            )
+            # Old API returned {module: status}; rebuild that dict for
+            # the dialog's done signal so callers downstream don't need
+            # to care about CompileResult yet.
+            self.done.emit({r.module: r.status for r in results})
         except Exception as exc:
             self.failed.emit(str(exc))
 

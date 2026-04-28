@@ -49,12 +49,19 @@ OPERATIONS = ("Get", "Get Next", "Get Bulk", "Get Subtree", "Walk", "Set")
 
 
 class MibBrowserWindow(QMainWindow):
-    def __init__(self, tree: MibTree, settings: AppSettings) -> None:
+    def __init__(self, store, settings: AppSettings) -> None:
+        """``store`` is a MibStore (typically MibTreeStore from the
+        infra adapter). The main window holds the store as the
+        application-level boundary and exposes the concrete tree via
+        ``self.tree`` for widgets that need the full MibTree API
+        (format_oid, lookup_oid, traversal). Catalogue mutations
+        (enable/disable modules) go through the store; UI then refreshes
+        models from store.tree."""
         super().__init__()
         self.setWindowTitle(_t("MIB Browser (Python)"))
         self.resize(1180, 780)
 
-        self.tree = tree
+        self.store = store
         self.settings = settings
         self._active_threads: list = []   # keep refs so worker threads don't GC
 
@@ -1885,27 +1892,33 @@ class MibBrowserWindow(QMainWindow):
             layout.addWidget(ed)
             dlg.exec()
 
-    def _swap_tree(self, new_tree: MibTree) -> None:
-        """Replace the live MIB tree and refresh dependent widgets."""
-        self.tree = new_tree
+    @property
+    def tree(self):
+        """Read-through to the store's concrete tree. Widgets that need
+        the full MibTree API (format_oid, lookup_oid, child/parent
+        traversal) read this; mutations go through self.store."""
+        return self.store.tree
+
+    def _refresh_tree_views(self) -> None:
+        """Rebuild dependent Qt models from the current store.tree.
+        Call after store.set_enabled(...) or any other tree-mutating
+        operation."""
         self.mib_model = MibTreeModel(
             self.tree, single_root=self.settings.single_tree_root)
         self.mib_proxy.setSourceModel(self.mib_model)
         self.result_model.set_tree(self.tree)
 
     def _reload_mib_tree(self) -> None:
-        from ..infra import config, mib_loader
-        new_tree = mib_loader.MibTree()
-        new_tree.load_compiled(config.compiled_mibs_dir(),
-                               enabled=self.settings.enabled_mibs)
-        self._swap_tree(new_tree)
+        from ..infra import config
+        self.store.set_enabled(self.settings.enabled_mibs or [])
+        self._refresh_tree_views()
         self.status.showMessage(
             f"MIB tree reloaded: {len(self.tree.modules)} modules, "
             f"{len(self.tree._by_name)} names")
-        if new_tree.missing_enabled:
+        if self.tree.missing_enabled:
             self._log(
-                f"!!! {len(new_tree.missing_enabled)} enabled MIB modules "
-                f"missing from cache: {', '.join(new_tree.missing_enabled)}. "
+                f"!!! {len(self.tree.missing_enabled)} enabled MIB modules "
+                f"missing from cache: {', '.join(self.tree.missing_enabled)}. "
                 f"See log: {config.log_file()}", level="warn")
 
     def _rebuild_mibs(self) -> None:
@@ -1913,7 +1926,8 @@ class MibBrowserWindow(QMainWindow):
         from PyQt6.QtCore import QObject, QThread, pyqtSignal
         from PyQt6.QtWidgets import QCheckBox, QDialog, QDialogButtonBox, QVBoxLayout
 
-        from ..infra import mib_loader
+        from ..infra import config
+        from ..infra.adapters import PysmiMibCompiler
 
         # Tiny modal: confirm + offer network fallback. Local-only by default.
         d = QDialog(self); d.setWindowTitle(_t("Recompile all MIBs…"))
@@ -1942,16 +1956,19 @@ class MibBrowserWindow(QMainWindow):
 
         class _RebuildWorker(QObject):
             progress = pyqtSignal(str, str, int, int)   # mod,status,done,total
-            done = pyqtSignal(object)
+            done = pyqtSignal()
             failed = pyqtSignal(str)
             def run(self):
                 try:
-                    def cb(mod, status, done, total):
-                        self.progress.emit(mod, str(status), done, total)
-                    t = mib_loader.build_tree_with_default_mibs(
-                        rebuild=True, on_progress=cb,
-                        use_network=use_network)
-                    self.done.emit(t)
+                    compiler = PysmiMibCompiler(config.compiled_mibs_dir())
+                    sources = [config.default_mibs_src()]
+                    modules = compiler.discover(sources)
+                    compiler.compile(
+                        modules, sources,
+                        rebuild=True, use_network=use_network,
+                        on_progress=lambda r, i, n:
+                            self.progress.emit(r.module, r.status, i, n))
+                    self.done.emit()
                 except Exception as e:
                     self.failed.emit(str(e))
 
@@ -1968,21 +1985,22 @@ class MibBrowserWindow(QMainWindow):
                 self.progress.setFormat("%v / %m (%p%)")
             self._advance_progress(done,
                 f"Rebuild: [{done}/{total}] {mod} — {status}")
-        def on_done(new_tree):
-            # We know how many modules were in mibs-src/ (we iterate them).
-            # pysmi may have pulled in additional transitive deps — count
-            # them separately so the user isn't confused.
-            from ..infra import config as _cfg
-            from ..infra import mib_loader as _ml
-            src_modules = set(
-                _ml._discover_modules([_cfg.default_mibs_src()]))
-            total_loaded = len(new_tree.modules)
-            source_count = len(src_modules & new_tree.modules.keys())
+        def on_done():
+            # Reload the catalogue from the freshly-rebuilt cache.
+            # Original behaviour: rebuild loads everything into the tree
+            # ignoring the user's narrow filter. Match that by passing
+            # available_modules() — what's on disk now.
+            self.store.set_enabled(self.store.available_modules())
+            self._refresh_tree_views()
+            # Count source-vs-dependency modules for the status message.
+            compiler = PysmiMibCompiler(config.compiled_mibs_dir())
+            src_modules = set(compiler.discover([config.default_mibs_src()]))
+            total_loaded = len(self.tree.modules)
+            source_count = len(src_modules & self.tree.modules.keys())
             deps_count = total_loaded - source_count
-            self._swap_tree(new_tree)
             msg = (f"MIB cache rebuilt: {source_count} from source"
                    f" (+{deps_count} dependencies), {total_loaded} total, "
-                   f"{len(new_tree._by_name)} symbols")
+                   f"{len(self.tree._by_name)} symbols")
             self._end_progress(msg)
             self._log(f"<<< Rebuild finished: {msg}")
         def on_failed(msg):

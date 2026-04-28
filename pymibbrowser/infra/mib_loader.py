@@ -83,74 +83,10 @@ def _discover_modules(src_dirs: list[Path]) -> list[str]:
     return mods
 
 
-def compile_mibs(src_dirs: list[Path], dest: Path, verbose: bool = False,
-                 on_progress=None, rebuild: bool = False,
-                 use_network: bool = False) -> dict:
-    """
-    Compile every .mib / .my / .txt / bare-name ASN.1 source under src_dirs
-    into pysnmp JSON in dest.
-
-    If ``on_progress`` is given, it's called after each module as
-    ``on_progress(module_name, status, done, total)`` — perfect for driving
-    a Qt progress bar. Internally we iterate modules one at a time instead
-    of calling ``compile(*all_modules)``; pysmi already caches resolved
-    deps in ``dest``, so the per-module overhead is negligible after the
-    first few modules.
-
-    Returns the merged pysmi status dict over all modules.
-    """
-    dest.mkdir(parents=True, exist_ok=True)
-    compiler = _make_compiler(src_dirs, dest, use_network=use_network)
-    modules = _discover_modules(src_dirs)
-    total = len(modules)
-    log.info("Compiling %d MIB modules into %s (network=%s)",
-             total, dest, use_network)
-
-    merged: dict = {}
-    import time as _time
-    for i, mod in enumerate(modules, 1):
-        # Log BEFORE the call: if pysmi hangs inside a bad MIB, the file
-        # log shows exactly which module was the last one attempted.
-        log.info("[%d/%d] compiling %s …", i, total, mod)
-        t0 = _time.monotonic()
-        try:
-            res = compiler.compile(mod, rebuild=rebuild, genTexts=True,
-                                    ignoreErrors=True)
-        except Exception as exc:
-            res = {mod: f"failed: {exc}"}
-            log.exception("[%d/%d] exception while compiling %s",
-                          i, total, mod)
-        dt = _time.monotonic() - t0
-        status = res.get(mod, "")
-        if dt > 3:
-            log.warning("[%d/%d] %s → %s in %.1fs (slow)",
-                        i, total, mod, status, dt)
-        else:
-            log.info("[%d/%d] %s → %s in %.2fs",
-                     i, total, mod, status, dt)
-        merged.update(res)
-        if on_progress is not None:
-            try:
-                on_progress(mod, status, i, total)
-            except Exception:
-                log.exception("progress callback error")
-    return merged
-
-
-def compile_modules(module_names: list[str], extra_src_dirs: list[Path],
-                    dest: Path, use_network: bool = False) -> dict:
-    """
-    Compile the named modules. pysmi resolves each module's IMPORTS
-    recursively — it walks FileReader (extra_src_dirs + the default MIB
-    directory) and falls back to HttpReader to pull missing deps from
-    mibs.pysnmp.com. Returns {module_name: status} from pysmi.
-    """
-    dest.mkdir(parents=True, exist_ok=True)
-    from . import config
-    src_dirs = [*list(extra_src_dirs), config.default_mibs_src()]
-    compiler = _make_compiler(src_dirs, dest, use_network=use_network)
-    return compiler.compile(*module_names, rebuild=True, genTexts=True,
-                            ignoreErrors=True)
+# Compilation has moved to ``infra.adapters.mib_compiler.PysmiMibCompiler``.
+# The legacy ``compile_mibs`` / ``compile_modules`` / ``build_tree_with_default_mibs``
+# wrappers used to live here; deleted in the UI migration since the only
+# remaining callsites had become test-only.
 
 
 # ---------------------------------------------------------------------------
@@ -585,24 +521,7 @@ class MibTree:
         return self._by_name.get(name)
 
 
-# ---------------------------------------------------------------------------
-# Convenience bootstrapping
-# ---------------------------------------------------------------------------
-
-def build_tree_with_default_mibs(rebuild: bool = False,
-                                  on_progress=None,
-                                  use_network: bool = False) -> MibTree:
-    """Compile and load all MIBs from default sources, return a MibTree.
-
-    ``on_progress(module, status, done, total)`` is forwarded to compile_mibs."""
-    dest = config.compiled_mibs_dir()
-    src = config.default_mibs_src()
-
-    if rebuild or not any(dest.glob("*.json")):
-        log.info("Compiling MIBs (this takes a while on first run)...")
-        compile_mibs([src], dest, on_progress=on_progress,
-                     rebuild=rebuild, use_network=use_network)
-
-    tree = MibTree()
-    tree.load_compiled(dest)
-    return tree
+# Bootstrap helpers used to live here too. After the engine/adapter
+# split, both compilation (PysmiMibCompiler) and tree construction
+# (MibTreeStore) are consumed directly by main.py — there's no value
+# in a "do both" convenience wrapper that hides the seam.
