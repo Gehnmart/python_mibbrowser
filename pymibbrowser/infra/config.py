@@ -62,23 +62,10 @@ def default_mibs_src() -> Path:
     return project_root() / "mibs-src"
 
 
-@dataclass
-class Agent:
-    host: str = "127.0.0.1"
-    port: int = 161
-    version: str = "2c"               # "1" | "2c" | "3"
-    read_community: str = "public"
-    write_community: str = "private"
-    timeout_s: float = 3.0
-    retries: int = 1
-    max_repetitions: int = 10
-    non_repeaters: int = 0
-    # SNMPv3 (placeholder — не реализовано, пользователь попросил без v3)
-    user: str = ""
-    auth_protocol: str = "none"
-    auth_password: str = ""
-    priv_protocol: str = "none"
-    priv_password: str = ""
+# Agent is defined in the engine layer — it's a pure data type with no
+# library deps. We re-export so callers writing `from pymibbrowser.infra.config
+# import Agent` keep working, and so AppSettings below can hold it directly.
+from ..engine.model import Agent
 
 
 @dataclass

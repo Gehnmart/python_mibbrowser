@@ -1,17 +1,30 @@
-"""
-Run an iReasoning-style SNMP script file. See docs/help.html for the format.
+"""Thin file-level shim over engine.execute.
 
-Supported commands: get, getnext, set, if, sleep, save, comments.
+Reads the script from disk, hands the text to the parser, builds the
+production adapters (pysnmp + MibTree + system clock + file sink), and
+runs the AST through the engine. Every interesting decision lives in
+``pymibbrowser.engine`` — this module only wires the file boundary.
+
+Kept as a public API for back-compat: existing UI callers do
+``script_runner.run(path, agent, tree, logger=cb, should_cancel=cb)`` and
+that signature is preserved.
 """
 from __future__ import annotations
 
-import re
-import time
 from collections.abc import Callable
 from pathlib import Path
 
-from . import snmp_ops
-from .config import Agent
+from ..engine.model import Agent
+from ..engine.parser import parse_script
+from ..engine.runner import ExecutionContext, execute
+from .adapters import (
+    CallbackLogger,
+    FileSink,
+    MibTreeResolver,
+    PrintLogger,
+    PysnmpTransport,
+    WallClock,
+)
 from .mib_loader import MibTree
 
 
@@ -19,194 +32,29 @@ class ScriptError(Exception):
     pass
 
 
-def _parse_host(spec: str, default_port: int) -> tuple[str, int]:
-    if ":" in spec:
-        host, port = spec.rsplit(":", 1)
-        return host, int(port)
-    return spec, default_port
-
-
 def run(path: str, agent: Agent, tree: MibTree,
         logger: Callable[[str], None] | None = None,
         should_cancel: Callable[[], bool] | None = None) -> None:
-    def log(msg: str) -> None:
-        if logger is not None:
-            logger(msg)
-        else:
-            print(msg)
+    """Read ``path``, parse it, and execute against the given agent + MIB
+    tree. ``logger`` receives every diagnostic line; ``should_cancel`` is
+    polled periodically so the caller can interrupt long-running scripts."""
+    text = Path(path).read_text()
+    script = parse_script(text, default_port=agent.port)
 
-    def cancelled() -> bool:
-        return should_cancel() if should_cancel is not None else False
+    log_adapter = CallbackLogger(logger) if logger is not None else PrintLogger()
+    # FileSink emits a "saved N lines to <path>" line through the logger
+    # at close() — preserves the original UX, where the user sees the
+    # final write target on stdout/log pane.
+    sink = FileSink(on_persist=lambda p, n: log_adapter.log(
+        f"saved {n} line(s) to {p}"))
 
-    def interruptible_sleep(total: float) -> None:
-        """time.sleep that wakes up every 100 ms to check should_cancel.
-        Lets the caller bail out of `sleep 3600` within a tenth of a
-        second instead of waiting an hour at close time."""
-        step = 0.1
-        remaining = total
-        while remaining > 0:
-            if cancelled():
-                return
-            chunk = step if remaining > step else remaining
-            time.sleep(chunk)
-            remaining -= chunk
-
-    last_result = None
-    last_error = 0
-    save_path: Path | None = None
-    save_buffer: list[str] = []
-
-    def _save_line(s: str) -> None:
-        save_buffer.append(s)
-
-    def _flush_save() -> None:
-        if save_path is None or not save_buffer:
-            return
-        p = save_path
-        i = 0
-        while p.exists():
-            i += 1
-            p = save_path.with_suffix(save_path.suffix + f".{i}")
-        p.write_text("\n".join(save_buffer), encoding="utf-8")
-        log(f"saved {len(save_buffer)} line(s) to {p}")
-
-    for raw_line in Path(path).read_text().splitlines():
-        # Bail between commands too — not just during sleep. Long SNMP
-        # ops (big walks) go through pysnmp which we can't interrupt,
-        # but at least the script stops scheduling new ones.
-        if cancelled():
-            log("[cancelled]")
-            break
-        line = raw_line.strip()
-        if not line or line.startswith("#"):
-            continue
-
-        parts = line.split()
-        op = parts[0].lower()
-
-        # Conditional: `if $ <op> <val> <action> <arg>` or `if $ err <action> <arg>`
-        if op == "if":
-            if last_result is None and last_error == 0:
-                continue
-            # `if $ err <action> [arg]` — error predicate, no operand. Try
-            # this first so the comparison regex below doesn't mis-eat the
-            # action token as the operand.
-            m = re.match(r"if\s+\$\s+err\s+(\w+)(?:\s+(.+))?", line)
-            if m:
-                pred = "err"
-                operand = ""
-                action, arg = m.groups()
-            else:
-                m = re.match(
-                    r"if\s+\$\s+(>=|<=|!=|>|<|=)\s*(\S+)\s+(\w+)(?:\s+(.+))?",
-                    line)
-                if not m:
-                    log(f"skip: invalid if: {line}")
-                    continue
-                pred, operand, action, arg = m.groups()
-            ok = False
-            if pred == "err":
-                ok = last_error != 0
-            else:
-                try:
-                    cur = float(last_result) if last_result is not None else None
-                    val = float(operand) if operand else None
-                except (TypeError, ValueError):
-                    cur = val = None
-                if cur is not None and val is not None:
-                    ok = {"<": cur < val, ">": cur > val,
-                          "<=": cur <= val, ">=": cur >= val,
-                          "=": cur == val, "!=": cur != val}[pred]
-            if ok:
-                if action == "sound":
-                    # Stdlib "bell" — a cheap notification
-                    print("\a", end="", flush=True)
-                elif action == "email":
-                    log(f"[email action → {arg}] (SMTP not configured, skipped)")
-                elif action == "sleep":
-                    try:
-                        interruptible_sleep(float(arg))
-                    except Exception:
-                        pass
-            continue
-
-        if op == "sleep":
-            try:
-                interruptible_sleep(float(parts[1]))
-            except Exception as exc:
-                log(f"bad sleep: {exc}")
-            continue
-
-        if op == "save":
-            save_path = Path(" ".join(parts[1:])).expanduser()
-            continue
-
-        if op in ("get", "getnext"):
-            host_spec, *oids = parts[1:]
-            host, port = _parse_host(host_spec, agent.port)
-            ag = Agent(**{**vars(agent), "host": host, "port": port})
-            resolved = []
-            for o in oids:
-                t = tree.resolve_name(o)
-                if t is None:
-                    log(f"unresolved OID: {o}")
-                    last_error = 1
-                    continue
-                resolved.append(t)
-            if not resolved:
-                continue
-            fn = snmp_ops.op_get if op == "get" else snmp_ops.op_next
-            try:
-                vbs = fn(ag, resolved)
-                last_error = 0
-            except Exception as exc:
-                log(f"{op} {host_spec}: {exc}")
-                last_error = 1
-                continue
-            for vb in vbs:
-                ln = f"{'.' + '.'.join(map(str, vb.oid))}\t{vb.type_name}\t{vb.display_value}"
-                log(ln)
-                _save_line(ln)
-            if vbs:
-                last_result = vbs[-1].display_value
-            continue
-
-        if op == "set":
-            # set host oid type val [oid type val ...]
-            host_spec, *rest = parts[1:]
-            host, port = _parse_host(host_spec, agent.port)
-            ag = Agent(**{**vars(agent), "host": host, "port": port})
-            pairs = []
-            idx = 0
-            while idx + 2 < len(rest):
-                oid = rest[idx]; type_tag = rest[idx + 1]; val = rest[idx + 2]
-                t = tree.resolve_name(oid)
-                if t is None:
-                    log(f"unresolved OID: {oid}")
-                    last_error = 1
-                    idx += 3
-                    continue
-                try:
-                    pairs.append((t, snmp_ops.build_set_value(type_tag, val)))
-                except Exception as exc:
-                    log(f"bad set value: {exc}")
-                    last_error = 1
-                idx += 3
-            if not pairs:
-                continue
-            try:
-                vbs = snmp_ops.op_set(ag, pairs)
-                last_error = 0
-                for vb in vbs:
-                    ln = f"{'.' + '.'.join(map(str, vb.oid))}\t{vb.type_name}\t{vb.display_value}"
-                    log(ln); _save_line(ln)
-                if vbs:
-                    last_result = vbs[-1].display_value
-            except Exception as exc:
-                log(f"set: {exc}")
-                last_error = 1
-            continue
-
-        log(f"unknown command: {line}")
-
-    _flush_save()
+    ctx = ExecutionContext(
+        agent=agent,
+        snmp=PysnmpTransport(),
+        clock=WallClock(),
+        resolver=MibTreeResolver(tree),
+        logger=log_adapter,
+        sink=sink,
+        cancel=should_cancel or (lambda: False),
+    )
+    execute(script, ctx)
