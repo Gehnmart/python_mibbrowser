@@ -221,6 +221,11 @@ class MibTree:
                 data = json.loads(jp.read_text())
             except Exception:
                 continue
+            if not isinstance(data, dict):
+                # pysmi-compiled module is always a JSON object; a list
+                # or scalar means the file is corrupt or unrelated junk
+                # in the cache dir.
+                continue
             self._harvest_textual_conventions(data)
         # Second pass: merge only the enabled ones into the tree.
         for jp in sorted(compiled_dir.glob("*.json")):
@@ -231,6 +236,10 @@ class MibTree:
                 data = json.loads(jp.read_text())
             except Exception as exc:
                 log.warning("skip %s: %s", jp.name, exc)
+                continue
+            if not isinstance(data, dict):
+                log.warning("skip %s: top-level is %s, expected object",
+                             jp.name, type(data).__name__)
                 continue
             self.modules[mod_name] = data
             count += 1
@@ -422,21 +431,30 @@ class MibTree:
     # Lookup API --------------------------------------------------------
 
     def resolve_name(self, name_or_oid: str) -> tuple[int, ...] | None:
-        """Resolve 'sysUpTime' or 'sysUpTime.0' or '1.3.6.1.2.1.1.3.0'."""
+        """Resolve 'sysUpTime' or 'sysUpTime.0' or '1.3.6.1.2.1.1.3.0'.
+
+        A garbage suffix (non-digit, empty, mixed) returns None — the
+        previous lenient behaviour silently dropped invalid components,
+        which masked typos like ``sysUpTime.O`` (capital O) by
+        resolving them to the bare node OID."""
         s = name_or_oid.strip().lstrip(".")
         if not s:
             return None
-        # Pure numeric?
-        if all(part.isdigit() for part in s.split(".")):
-            return tuple(int(p) for p in s.split("."))
-        # name[.suffix]
         parts = s.split(".")
+        # Empty components ("a..b") are always invalid.
+        if any(p == "" for p in parts):
+            return None
+        # Pure numeric?
+        if all(p.isdigit() for p in parts):
+            return tuple(int(p) for p in parts)
         head = parts[0]
-        suffix = tuple(int(p) for p in parts[1:] if p.isdigit())
+        # Symbolic head + optional all-digit suffix; mixed is rejected.
+        if not all(p.isdigit() for p in parts[1:]):
+            return None
         node = self._by_name.get(head)
         if node is None:
             return None
-        return node.oid + suffix
+        return node.oid + tuple(int(p) for p in parts[1:])
 
     def lookup_oid(self, oid: Iterable[int]) -> MibNode | None:
         """Nearest named ancestor for a numeric OID."""

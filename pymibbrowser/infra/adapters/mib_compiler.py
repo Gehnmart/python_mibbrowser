@@ -52,10 +52,18 @@ def _make_compiler(src_dirs: list[Path], dest: Path,
     return c
 
 
+_MIB_EXTS = (".mib", ".my", ".txt", ".smi")
+
+
 def _discover_modules(src_dirs: list[Path]) -> list[str]:
     """Walk source directories for MIB-shaped files. Names are
     upper-cased, deduplicated, stub MIBs filtered out. Filesystem-order
-    walk; callers that need sorted output sort themselves."""
+    walk; callers that need sorted output sort themselves.
+
+    Accepts files with a known MIB extension (.mib/.my/.txt/.smi) or
+    no extension at all (the SMI convention). Other extensions
+    (README.md, *.pdf, dotfiles like .gitignore) are skipped — pysmi
+    would only fail loudly on them anyway."""
     mods: list[str] = []
     seen: set[str] = set()
     for d in src_dirs:
@@ -65,8 +73,14 @@ def _discover_modules(src_dirs: list[Path]) -> list[str]:
             if not p.is_file():
                 continue
             name = p.name
-            mod = (p.stem if name.lower().endswith((".mib", ".my", ".txt", ".smi"))
-                   else name)
+            lower = name.lower()
+            if lower.endswith(_MIB_EXTS):
+                mod = p.stem
+            elif "." in name:
+                # Has an extension, but not one we recognise — not a MIB.
+                continue
+            else:
+                mod = name
             mod = mod.upper()
             if mod in seen or mod in STUB_MIBS:
                 continue

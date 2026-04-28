@@ -89,6 +89,19 @@ class TestBootstrapAndLookup:
         assert tree.resolve_name("noSuchSymbol") is None
         assert tree.resolve_name("") is None
 
+    def test_resolve_name_rejects_garbage_suffix(self, tree):
+        """Symbolic head with non-digit suffix used to silently drop the
+        garbage and resolve to the bare OID — that masked typos like
+        `sysUpTime.O` (capital O instead of zero). Now strict: any
+        non-digit suffix component returns None."""
+        # Plain garbage suffix — would have returned mib-2.oid before.
+        assert tree.resolve_name("mib-2.foo") is None
+        # Mixed suffix — would have dropped the bad component.
+        assert tree.resolve_name("mib-2.bad.5") is None
+        # Empty component anywhere.
+        assert tree.resolve_name("mib-2..0") is None
+        assert tree.resolve_name("1.3..1") is None
+
     def test_lookup_oid_returns_nearest_ancestor(self, tree):
         n = tree.lookup_oid((1, 3, 6, 1, 2, 1, 99, 99))
         assert n is not None
@@ -243,6 +256,18 @@ class TestLoadCompiled:
 
     def test_load_skips_corrupt_file(self, tmp_path, caplog):
         (tmp_path / "BAD.json").write_text("{ not json")
+        _write_module(tmp_path, "GOOD", {"x": {"oid": "1.3.6.1.2.1.7"}})
+        t = MibTree()
+        with caplog.at_level("WARNING"):
+            assert t.load_compiled(tmp_path) == 1
+        assert t.node_by_name("x") is not None
+
+    def test_load_skips_non_object_top_level(self, tmp_path, caplog):
+        """Stray JSON files in the cache (null, array, scalar) must not
+        crash the loader — would have raised AttributeError when
+        _harvest_textual_conventions called .items() on a non-dict."""
+        (tmp_path / "NULL.json").write_text("null")
+        (tmp_path / "ARRAY.json").write_text("[1, 2, 3]")
         _write_module(tmp_path, "GOOD", {"x": {"oid": "1.3.6.1.2.1.7"}})
         t = MibTree()
         with caplog.at_level("WARNING"):

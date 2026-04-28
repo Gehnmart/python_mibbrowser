@@ -49,6 +49,20 @@ def test_discover_walks_extension_variants(cache, tmp_path):
     assert set(out) == {"FOO", "BAR", "BAZ"}
 
 
+def test_discover_skips_non_mib_extensions(cache, tmp_path):
+    """README.md, .gitignore, *.pdf etc. shipped alongside MIBs in the
+    source tree must not enter the compile queue — pysmi would only
+    fail loudly on them, polluting the per-module status report."""
+    src = tmp_path / "src"; src.mkdir()
+    (src / "REAL-MIB.mib").write_text("")
+    (src / "BARE").write_text("")          # no extension — keep
+    (src / "README.md").write_text("docs")
+    (src / "docs.pdf").write_text("pdf")
+    (src / ".gitignore").write_text("ignore")
+    out = PysmiMibCompiler(cache).discover([src])
+    assert set(out) == {"REAL-MIB", "BARE"}
+
+
 def test_discover_skips_stub_mibs(cache, tmp_path):
     """Framework MIBs that pysnmp provides at runtime (ASN1, SNMPv2-SMI,
     ...) are filtered — compiling them would be redundant."""

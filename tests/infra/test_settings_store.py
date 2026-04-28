@@ -41,6 +41,16 @@ def test_load_corrupt_json_returns_defaults(tmp_path):
     assert s.current_agent.host == "127.0.0.1"
 
 
+@pytest.mark.parametrize("payload", ["null", "42", "true", "[1, 2, 3]"])
+def test_load_non_object_json_returns_defaults(tmp_path, payload):
+    """Top-level must be a JSON object. Anything else (null, int, bool,
+    bare list) means the file isn't ours — must not crash startup."""
+    p = tmp_path / "settings.json"
+    p.write_text(payload)
+    s = JsonFileSettingsStore(p).load()
+    assert s.current_agent.host == "127.0.0.1"
+
+
 def test_load_partial_keeps_defaults_for_missing_fields(tmp_path):
     p = tmp_path / "settings.json"
     p.write_text(json.dumps({"language": "en", "trap_port": 1162}))

@@ -64,6 +64,11 @@ class JsonFileSettingsStore:
             data = json.loads(self._path.read_text())
         except Exception:
             return AppSettings()
+        # Top-level must be a JSON object — anything else (null, int,
+        # bare string, list) means the file isn't ours. Treat the same
+        # as a parse failure so a corrupt file can't crash startup.
+        if not isinstance(data, dict):
+            return AppSettings()
         kwargs = {}
         for f in dataclasses.fields(AppSettings):
             if f.name not in data:

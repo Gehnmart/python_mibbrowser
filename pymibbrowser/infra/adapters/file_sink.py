@@ -59,6 +59,10 @@ class FileSink:
         while path.exists():
             i += 1
             path = self._target.with_suffix(self._target.suffix + f".{i}")
+        # `save subdir/out.txt` should not crash if subdir doesn't yet
+        # exist — match JsonFileSettingsStore.save's "create parent on
+        # write" behaviour.
+        path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text("\n".join(self._buffer), encoding="utf-8")
         if self._on_persist is not None:
             self._on_persist(path, len(self._buffer))

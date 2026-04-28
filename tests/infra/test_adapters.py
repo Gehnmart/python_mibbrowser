@@ -99,6 +99,16 @@ class TestFileSink:
         s.close()
         assert (tmp_path / "out.txt.2").read_text() == "c"
 
+    def test_close_creates_missing_parent_dir(self, tmp_path):
+        """`save subdir/out.txt` with subdir/ absent must not crash on
+        close — the parent is created on demand."""
+        target = tmp_path / "fresh" / "deep" / "out.txt"
+        s = FileSink()
+        s.open(str(target))
+        s.emit("hello")
+        s.close()
+        assert target.read_text() == "hello"
+
     def test_open_replaces_previous_target(self, tmp_path):
         """If the script issues `save A` then `save B` — A is dropped,
         only B's path receives the eventual write."""
