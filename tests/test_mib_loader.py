@@ -12,8 +12,8 @@ from pathlib import Path
 
 import pytest
 
-from pymibbrowser.core import mib_loader
-from pymibbrowser.core.mib_loader import (
+from pymibbrowser.infra import mib_loader
+from pymibbrowser.infra.mib_loader import (
     MibNode,
     MibTree,
     _discover_modules,

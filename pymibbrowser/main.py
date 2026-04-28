@@ -8,7 +8,7 @@ from pathlib import Path
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QApplication, QMessageBox, QProgressDialog
 
-from .core import config, i18n, mib_loader
+from .infra import config, i18n, mib_loader
 
 
 def _setup_logging() -> None:

@@ -16,7 +16,7 @@ from dataclasses import dataclass, field
 
 from PyQt6.QtCore import QAbstractItemModel, QModelIndex, QSortFilterProxyModel, Qt
 
-from ..core.mib_loader import MibNode, MibTree
+from ..infra.mib_loader import MibNode, MibTree
 
 
 @dataclass

@@ -32,9 +32,9 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from ..core import script_runner
-from ..core.config import Agent
-from ..core.i18n import _t
+from ..infra import script_runner
+from ..infra.config import Agent
+from ..infra.i18n import _t
 
 # ---------------------------------------------------------------------------
 # Reference text (HTML) and canned examples — presented in the Reference tab

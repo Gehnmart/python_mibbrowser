@@ -14,8 +14,8 @@ from pyasn1.codec.ber import decoder, encoder
 from pysnmp.proto import api as snmp_api
 from pysnmp.proto import rfc1902, rfc1905
 
-from pymibbrowser.core import simulator
-from pymibbrowser.core.simulator import (
+from pymibbrowser.infra import simulator
+from pymibbrowser.infra.simulator import (
     SnmpAgentSim,
     _coerce,
     load_snmpwalk,

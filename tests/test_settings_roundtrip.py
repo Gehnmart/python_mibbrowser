@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from pymibbrowser.core.config import (
+from pymibbrowser.infra.config import (
     Agent,
     AppSettings,
     PollDefinition,

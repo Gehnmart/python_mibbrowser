@@ -7,9 +7,9 @@ from __future__ import annotations
 
 import pytest
 
-from pymibbrowser.core import script_runner
-from pymibbrowser.core.config import Agent
-from pymibbrowser.core.snmp_ops import VarBind
+from pymibbrowser.infra import script_runner
+from pymibbrowser.infra.config import Agent
+from pymibbrowser.infra.snmp_ops import VarBind
 
 
 class _Tree:
@@ -142,7 +142,7 @@ def test_cancel_breaks_out_of_sleep(tmp_path, stub_snmp, tree,
     # Simulate a user-cancel mid-sleep. We monkeypatch time.sleep to
     # set the cancel flag after the first chunk; the script should
     # abort with a [cancelled] log line and not run the next command.
-    from pymibbrowser.core import script_runner as sr
+    from pymibbrowser.infra import script_runner as sr
     cancelled_flag = {"v": False}
 
     sleeps: list[float] = []
@@ -249,7 +249,7 @@ def test_if_with_unparseable_numeric_skipped_gracefully(tmp_path, stub_snmp,
 
     def op_get(_a, oids):
         # Return a non-numeric display string.
-        from pymibbrowser.core.snmp_ops import VarBind
+        from pymibbrowser.infra.snmp_ops import VarBind
         return [VarBind(oid=oids[0], type_name="STRING", value=None,
                          display_value="not-a-number")]
     monkeypatch.setattr(script_runner.snmp_ops, "op_get", op_get)
@@ -301,7 +301,7 @@ def test_set_with_unresolved_oid_skipped_per_triple(tmp_path, stub_snmp, tree):
 def test_set_with_bad_value_logged(tmp_path, stub_snmp, tree, monkeypatch):
     """build_set_value raising must be caught and the triple skipped, but
     the rest of the script continues."""
-    from pymibbrowser.core import snmp_ops as so
+    from pymibbrowser.infra import snmp_ops as so
 
     def explode(tag, val):
         raise ValueError("not a number")
@@ -322,7 +322,7 @@ def test_set_op_exception_logged(tmp_path, stub_snmp, tree, monkeypatch):
 
 def test_set_logs_response_on_success(tmp_path, stub_snmp, tree, monkeypatch):
     """When op_set returns varbinds, each is logged on its own line."""
-    from pymibbrowser.core.snmp_ops import VarBind
+    from pymibbrowser.infra.snmp_ops import VarBind
 
     def op_set(_agent, _pairs):
         return [VarBind(oid=(1, 3, 6, 1, 2, 1, 1, 4, 0),

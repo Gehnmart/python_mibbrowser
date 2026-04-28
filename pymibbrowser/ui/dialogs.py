@@ -15,9 +15,9 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from ..core.config import Agent
-from ..core.i18n import _t
-from ..core.mib_loader import MibNode
+from ..infra.config import Agent
+from ..infra.i18n import _t
+from ..infra.mib_loader import MibNode
 
 
 class AgentDialog(QDialog):

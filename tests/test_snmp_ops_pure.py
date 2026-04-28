@@ -7,9 +7,9 @@ from __future__ import annotations
 import pytest
 from pysnmp.proto import rfc1902
 
-from pymibbrowser.core import snmp_ops
-from pymibbrowser.core.config import Agent
-from pymibbrowser.core.snmp_ops import (
+from pymibbrowser.infra import snmp_ops
+from pymibbrowser.infra.config import Agent
+from pymibbrowser.infra.snmp_ops import (
     SnmpError,
     VarBind,
     _build_auth,

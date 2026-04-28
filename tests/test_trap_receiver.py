@@ -11,8 +11,8 @@ from pyasn1.codec.ber import encoder
 from pysnmp.proto import api as snmp_api
 from pysnmp.proto import rfc1902
 
-from pymibbrowser.core import trap_receiver
-from pymibbrowser.core.trap_receiver import TrapEvent, TrapListener, _pp
+from pymibbrowser.infra import trap_receiver
+from pymibbrowser.infra.trap_receiver import TrapEvent, TrapListener, _pp
 
 
 # --- accept-list ----------------------------------------------------------

@@ -20,9 +20,9 @@ from PyQt6.QtWidgets import (
 )
 
 from .. import workers
-from ..core import snmp_ops
-from ..core.config import Agent, AppSettings, PollDefinition
-from ..core.i18n import _t
+from ..infra import snmp_ops
+from ..infra.config import Agent, AppSettings, PollDefinition
+from ..infra.i18n import _t
 
 
 def _agent_key(a: Agent) -> str:

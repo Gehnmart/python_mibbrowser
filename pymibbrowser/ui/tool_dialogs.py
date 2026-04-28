@@ -29,12 +29,12 @@ from PyQt6.QtWidgets import (
     QVBoxLayout,
 )
 
-from ..core import config, trap_sender
-from ..core.config import Agent
-from ..core.i18n import _t
-from ..core.mib_loader import MibTree
-from ..core.simulator import SnmpAgentSim
-from ..core.trap_receiver import TrapEvent, TrapListener
+from ..infra import config, trap_sender
+from ..infra.config import Agent
+from ..infra.i18n import _t
+from ..infra.mib_loader import MibTree
+from ..infra.simulator import SnmpAgentSim
+from ..infra.trap_receiver import TrapEvent, TrapListener
 
 # ---------------------------------------------------------------------------
 # Trap sender
@@ -95,7 +95,7 @@ class TrapSenderDialog(QDialog):
             self.vbs_table.removeRow(r)
 
     def _send(self) -> None:
-        from ..core import snmp_ops
+        from ..infra import snmp_ops
         trap_oid = self.trap_oid_e.text().strip().lstrip(".")
         if not trap_oid:
             QMessageBox.warning(self, "Trap", "Trap OID required.")
@@ -277,7 +277,7 @@ class MibEditorDialog(QDialog):
         from pysmi.searcher import AnyFileSearcher, StubSearcher
         from pysmi.writer import FileWriter
 
-        from ..core.mib_loader import STUB_MIBS
+        from ..infra.mib_loader import STUB_MIBS
 
         with tempfile.TemporaryDirectory() as tmpd:
             name = self._current_path.stem if self._current_path else "SCRATCH-MIB"

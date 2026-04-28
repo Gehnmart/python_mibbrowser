@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import pytest
 
-from pymibbrowser.core import trap_sender
+from pymibbrowser.infra import trap_sender
 
 
 @pytest.fixture

@@ -5,9 +5,9 @@ from typing import Any
 
 from PyQt6.QtCore import QAbstractTableModel, QModelIndex, Qt
 
-from ..core.i18n import _t
-from ..core.mib_loader import MibTree
-from ..core.snmp_ops import VarBind
+from ..infra.i18n import _t
+from ..infra.mib_loader import MibTree
+from ..infra.snmp_ops import VarBind
 
 COLUMNS = ("Name/OID", "Value", "Type", "IP:Port")
 

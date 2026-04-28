@@ -40,9 +40,9 @@ from PyQt6.QtWidgets import (
 )
 
 from .. import workers
-from ..core import snmp_ops
-from ..core.config import Agent
-from ..core.i18n import _t
+from ..infra import snmp_ops
+from ..infra.config import Agent
+from ..infra.i18n import _t
 
 # ---------------------------------------------------------------------------
 # Subprocess-streaming worker — used by both ping and traceroute

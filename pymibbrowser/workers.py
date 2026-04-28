@@ -6,7 +6,7 @@ from typing import Any
 
 from PyQt6.QtCore import QObject, QThread, pyqtSignal
 
-from .core import snmp_ops
+from .infra import snmp_ops
 
 
 class SnmpWorker(QObject):

@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import pytest
 
-from pymibbrowser.core import i18n
+from pymibbrowser.infra import i18n
 
 
 @pytest.fixture(autouse=True)

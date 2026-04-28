@@ -31,9 +31,9 @@ from PyQt6.QtWidgets import (
 )
 
 from .. import workers
-from ..core import snmp_ops
-from ..core.config import Agent
-from ..core.i18n import _t
+from ..infra import snmp_ops
+from ..infra.config import Agent
+from ..infra.i18n import _t
 
 # Mapping from VarBind.type_name → snmpwalk "<TYPE>" token. Anything not
 # explicitly named falls back to STRING (matches snmpwalk default).

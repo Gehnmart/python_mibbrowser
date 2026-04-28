@@ -8,7 +8,7 @@ compilation. The invariant we care about:
   or is a table/row/scalar/column/notification stops the chain."""
 from __future__ import annotations
 
-from pymibbrowser.core.mib_loader import MibNode
+from pymibbrowser.infra.mib_loader import MibNode
 from pymibbrowser.ui.mib_tree_model import _is_folder, build_virt_tree
 
 

@@ -1,4 +1,4 @@
-"""Cover the path-helper and load-edge branches of pymibbrowser.core.config
+"""Cover the path-helper and load-edge branches of pymibbrowser.infra.config
 that the roundtrip suite doesn't reach."""
 from __future__ import annotations
 
@@ -6,8 +6,8 @@ import json
 
 import pytest
 
-from pymibbrowser.core import config
-from pymibbrowser.core.config import AppSettings
+from pymibbrowser.infra import config
+from pymibbrowser.infra.config import AppSettings
 
 
 @pytest.fixture
@@ -84,8 +84,8 @@ def test_log_file_under_log_dir(tmp_xdg, monkeypatch):
 
 def test_project_root_resolves_above_package():
     root = config.project_root()
-    # core/config.py lives at <root>/pymibbrowser/core/config.py
-    assert (root / "pymibbrowser" / "core" / "config.py").is_file()
+    # infra/config.py lives at <root>/pymibbrowser/infra/config.py
+    assert (root / "pymibbrowser" / "infra" / "config.py").is_file()
 
 
 def test_default_mibs_src_points_at_repo_dir():

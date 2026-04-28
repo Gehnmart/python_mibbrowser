@@ -17,8 +17,8 @@ from PyQt6.QtWidgets import (
     QVBoxLayout,
 )
 
-from ..core.config import Agent, AppSettings
-from ..core.i18n import _t
+from ..infra.config import Agent, AppSettings
+from ..infra.i18n import _t
 
 COLUMNS = ("Host", "Port", "Version", "Read community", "Write community",
            "Timeout", "Retries")

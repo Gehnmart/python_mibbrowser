@@ -33,8 +33,8 @@ from PyQt6.QtWidgets import (
     QVBoxLayout,
 )
 
-from ..core.config import Agent, AppSettings, PollDefinition, PollVariable
-from ..core.i18n import _t
+from ..infra.config import Agent, AppSettings, PollDefinition, PollVariable
+from ..infra.i18n import _t
 
 OP_CHOICES = ("Get", "Get Next")
 

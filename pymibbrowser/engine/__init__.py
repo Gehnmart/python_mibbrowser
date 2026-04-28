@@ -10,6 +10,6 @@ This package contains:
                 port, no globals, no library imports beyond stdlib + typing.
 
 It does not import anything outside the standard library. Adapters live in
-``pymibbrowser.core`` (pysnmp, pysmi, sockets, files) and are wired up by the
+``pymibbrowser.infra`` (pysnmp, pysmi, sockets, files) and are wired up by the
 caller, not by the engine.
 """

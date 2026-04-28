@@ -27,9 +27,9 @@ from PyQt6.QtWidgets import (
 )
 
 from .. import workers
-from ..core import snmp_ops
-from ..core.config import AppSettings
-from ..core.i18n import _t
+from ..infra import snmp_ops
+from ..infra.config import AppSettings
+from ..infra.i18n import _t
 
 # Known scalar OIDs we pull in one GET.
 _BASIC_SCALARS = [
