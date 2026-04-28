@@ -41,6 +41,33 @@ class VarBind:
 
 
 @dataclass(frozen=True)
+class TrapEvent:
+    """One decoded SNMP trap. Pure data — no rfc1902 / pyasn1 internals.
+
+    Adapters parse incoming UDP datagrams and produce these; consumers
+    (UI tabs, CLI listeners, log writers) read them. The two SNMPv1-only
+    fields (enterprise / generic_trap / specific_trap / agent_addr) are
+    empty for v2c traps — a single struct keeps the consumer code
+    branch-free."""
+
+    received_at: float                  # seconds since epoch
+    source_ip: str
+    source_port: int
+    version: str                        # "1" | "2c"
+    community: str
+    trap_oid: str
+    uptime: int = 0
+    enterprise: str = ""                # v1 only
+    generic_trap: int = 0               # v1 only
+    specific_trap: int = 0              # v1 only
+    agent_addr: str = ""                # v1 only
+    # (oid, type_name, display_value) per varbind — same shape as VarBind
+    # but plain tuples to keep TrapEvent hashable.
+    var_binds: tuple[tuple[str, str, str], ...] = ()
+    raw_bytes: bytes = b""
+
+
+@dataclass(frozen=True)
 class MibNodeView:
     """Read-only view of a MIB node — what callers need to render or
     inspect a node without importing infra types. Adapters materialise

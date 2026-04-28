@@ -9,7 +9,9 @@ from __future__ import annotations
 
 from typing import Protocol
 
-from .model import Agent, MibNodeView, VarBind
+from collections.abc import Callable
+
+from .model import Agent, MibNodeView, TrapEvent, VarBind
 
 
 class SnmpTransport(Protocol):
@@ -60,6 +62,31 @@ class OutputSink(Protocol):
     def emit(self, line: str) -> None: ...
 
     def close(self) -> None: ...
+
+
+class TrapPublisher(Protocol):
+    """Send SNMP traps. The boundary speaks (oid, type_tag, raw) triples
+    — same shape as ``SnmpTransport.set`` — so the adapter owns the
+    vendor-encoding step and the engine never sees rfc1902."""
+
+    def send(self, host: str, port: int, community: str, version: str,
+              trap_oid: str,
+              var_binds: list[tuple[str, str, str]]) -> str:
+        """Returns "OK" on success, "error: <ind>" if pysnmp surfaced an
+        error indication, "status: <stat>" if the agent answered with an
+        SNMP error status."""
+
+
+class TrapSubscription(Protocol):
+    """Subscription to incoming SNMP traps. The on-trap callback is
+    captured at construction; start()/stop() control the listener
+    lifecycle."""
+
+    def start(self) -> None: ...
+
+    def stop(self) -> None: ...
+
+    def is_running(self) -> bool: ...
 
 
 class MibStore(Protocol):

@@ -11,6 +11,7 @@ from .logger import CallbackLogger, PrintLogger
 from .mib_store import MibTreeStore
 from .resolver import MibTreeResolver, NumericResolver
 from .snmp import PysnmpTransport
+from .traps import PysnmpTrapPublisher, UdpTrapSubscription
 
 __all__ = [
     "WallClock",
@@ -22,4 +23,6 @@ __all__ = [
     "MibTreeStore",
     "NumericResolver",
     "PysnmpTransport",
+    "PysnmpTrapPublisher",
+    "UdpTrapSubscription",
 ]
