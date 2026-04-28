@@ -191,7 +191,7 @@ class SaveWalkDialog(QDialog):
             return None
 
     def _run(self) -> None:
-        if self._thread is not None and self._thread.isRunning():
+        if workers.is_thread_alive(self._thread):
             return
         oid = self._resolve_oid(self.oid_edit.text())
         if oid is None:

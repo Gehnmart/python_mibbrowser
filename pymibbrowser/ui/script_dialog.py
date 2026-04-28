@@ -32,6 +32,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+from .. import workers
 from ..infra import script_runner
 from ..infra.config import Agent
 from ..infra.i18n import _t
@@ -290,7 +291,7 @@ class ScriptDialog(QDialog):
     # --- run -------------------------------------------------------------
 
     def _run(self) -> None:
-        if self._thread is not None and self._thread.isRunning():
+        if workers.is_thread_alive(self._thread):
             QMessageBox.information(self, _t("Run Script"),
                                      _t("A script is already running."))
             return

@@ -162,7 +162,7 @@ class _StreamDialog(QDialog):
     # --- run / stop / teardown --------------------------------------
 
     def _run(self) -> None:
-        if _thread_running(self._thread):
+        if workers.is_thread_alive(self._thread):
             return
         argv = self._build_argv()
         if not argv:
@@ -206,26 +206,6 @@ class _StreamDialog(QDialog):
         if self._thread is not None:
             workers.wait_if_running(self._thread, 500)
         super().closeEvent(ev)
-
-
-def _thread_running(t) -> bool:
-    """True iff ``t`` is a still-alive QThread that's currently running.
-
-    The Qt teardown chain (``thread.finished → thread.deleteLater``) can
-    fire between checks, leaving us with a Python reference to a C++
-    object that's already gone. Calling ``isRunning()`` on that proxy
-    raises RuntimeError. Guard against it the same way ``workers``
-    does — sip.isdeleted first, then ``isRunning``, and swallow the
-    race where the C++ side disappears between the two."""
-    if t is None:
-        return False
-    try:
-        from PyQt6.sip import isdeleted
-        if isdeleted(t):
-            return False
-        return t.isRunning()
-    except (RuntimeError, TypeError):
-        return False
 
 
 # ---------------------------------------------------------------------------
@@ -495,7 +475,7 @@ class DiscoveryDialog(QDialog):
         v.addLayout(btm)
 
     def _run(self) -> None:
-        if _thread_running(self._thread):
+        if workers.is_thread_alive(self._thread):
             return
         cidr = self.cidr_edit.text().strip()
         if not cidr:
