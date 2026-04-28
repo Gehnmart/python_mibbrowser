@@ -19,7 +19,6 @@ from pymibbrowser.infra.snmp_ops import (
     build_set_value,
 )
 
-
 # --- _format_timeticks ----------------------------------------------------
 
 class TestFormatTimeticks:
@@ -74,7 +73,7 @@ class TestDisplay:
         assert _display(rfc1902.OctetString(b"hello")) == "hello"
 
     def test_octetstring_utf8(self):
-        assert _display(rfc1902.OctetString("привет".encode("utf-8"))) != ""
+        assert _display(rfc1902.OctetString("привет".encode())) != ""
 
     def test_octetstring_binary_renders_hex(self):
         out = _display(rfc1902.OctetString(b"\x00\xff\x01"))

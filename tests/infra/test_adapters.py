@@ -4,11 +4,10 @@ on the infra side) and the few behavioural details that aren't
 mechanical (FileSink's no-overwrite, NumericResolver's strictness)."""
 from __future__ import annotations
 
-from collections.abc import Callable
-
 import pytest
 
-from pymibbrowser.engine.model import Agent, VarBind as EngineVarBind
+from pymibbrowser.engine.model import Agent
+from pymibbrowser.engine.model import VarBind as EngineVarBind
 from pymibbrowser.infra import snmp_ops
 from pymibbrowser.infra.adapters import (
     CallbackLogger,
@@ -22,7 +21,6 @@ from pymibbrowser.infra.adapters import (
 )
 from pymibbrowser.infra.mib_loader import MibTree
 from pymibbrowser.infra.snmp_ops import VarBind as RawVarBind
-
 
 # --- WallClock ------------------------------------------------------------
 

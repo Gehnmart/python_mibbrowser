@@ -3,8 +3,6 @@ primitives. This exercises happy-path, error_indication, and error_status
 branches and the table_walk row-stitching logic without any real network."""
 from __future__ import annotations
 
-from collections.abc import Iterable
-
 import pytest
 from pysnmp.proto import rfc1902
 
@@ -44,7 +42,6 @@ def _stub_cmd(monkeypatch, attr: str, return_value=None, *, error_ind=None,
 
     return_value: list of (name, val) pairs (the var_binds)."""
     async def fake(*_a, **_kw):
-        es = error_stat
         # err_stat needs to be a falsy-ish thing or have prettyPrint; emulate.
         class _Err:
             def __init__(self, msg): self._m = msg

@@ -6,13 +6,7 @@ import pytest
 
 from pymibbrowser.engine.ast import (
     Get,
-    GetNext,
-    If,
-    Save,
     Script,
-    Set,
-    Sleep,
-    Unknown,
 )
 from pymibbrowser.engine.model import Agent, VarBind
 from pymibbrowser.engine.parser import parse_script
@@ -25,7 +19,6 @@ from .fakes import (
     ListSink,
     RecordingSnmp,
 )
-
 
 # --- helpers --------------------------------------------------------------
 

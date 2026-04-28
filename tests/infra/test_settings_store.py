@@ -25,7 +25,6 @@ from pymibbrowser.infra.adapters import (
     default_settings_store,
 )
 
-
 # --- store contract -------------------------------------------------------
 
 def test_load_missing_file_returns_defaults(tmp_path):
@@ -190,7 +189,7 @@ def test_appsettings_model_has_no_persistence_internals():
     # shims; once the UI migrated to config.save_settings, the class
     # became plain data again.
     assert not hasattr(AppSettings, "load")
-    assert not hasattr(AppSettings, "save") or callable(getattr(AppSettings, "save"))
+    assert not hasattr(AppSettings, "save") or callable(AppSettings.save)
     # Ensure the dataclass has no surprising class attributes left over.
     import dataclasses
     names = {f.name for f in dataclasses.fields(AppSettings)}

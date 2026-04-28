@@ -12,7 +12,6 @@ import pytest
 from pymibbrowser.engine.model import MibNodeView
 from pymibbrowser.infra.adapters import MibTreeStore
 
-
 # --- helpers --------------------------------------------------------------
 
 def _write_module(d: Path, name: str, body: dict) -> None:

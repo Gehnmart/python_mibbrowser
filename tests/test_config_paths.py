@@ -7,7 +7,6 @@ import json
 import pytest
 
 from pymibbrowser.infra import config
-from pymibbrowser.infra.config import AppSettings
 
 
 @pytest.fixture

@@ -5,7 +5,6 @@ from __future__ import annotations
 
 from pymibbrowser import qt_safety, workers
 
-
 # --- is_thread_alive ------------------------------------------------------
 
 def test_alive_none_is_false():

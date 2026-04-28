@@ -7,8 +7,6 @@ CompileResult.ok flag — don't depend on which specific MIB compiles
 first."""
 from __future__ import annotations
 
-from pathlib import Path
-
 import pytest
 
 from pymibbrowser.engine.model import CompileResult

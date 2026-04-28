@@ -37,6 +37,7 @@ dev = [
     "ruff>=0.7",
     "mypy>=1.10",
     "bandit[toml]>=1.7",
+    "mutmut>=3.0",
 ]
 
 [project.scripts]
@@ -111,9 +112,9 @@ ignore = [
 # Translation dictionary has intentionally repeated keys (the "last wins"
 # behaviour is how we append alternatives) and is full of Cyrillic
 # homoglyphs — ruff's RUF001-003 and F601 are noise here.
-"pymibbrowser/i18n.py" = ["E501", "RUF001", "RUF002", "RUF003", "F601"]
+"pymibbrowser/infra/i18n.py" = ["E501", "RUF001", "RUF002", "RUF003", "F601"]
 "pymibbrowser/ui/*.py" = ["RUF001", "RUF002", "RUF003"]
-"tests/*.py" = ["RUF001", "RUF002", "RUF003"]
+"tests/**/*.py" = ["RUF001", "RUF002", "RUF003"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["pymibbrowser"]

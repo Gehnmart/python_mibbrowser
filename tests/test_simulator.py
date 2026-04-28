@@ -6,21 +6,17 @@ GET/GETNEXT/GETBULK/SET pipeline with no UDP socket involved."""
 from __future__ import annotations
 
 import socket
-import threading
-import time
 
 import pytest
 from pyasn1.codec.ber import decoder, encoder
 from pysnmp.proto import api as snmp_api
 from pysnmp.proto import rfc1902, rfc1905
 
-from pymibbrowser.infra import simulator
 from pymibbrowser.infra.simulator import (
     SnmpAgentSim,
     _coerce,
     load_snmpwalk,
 )
-
 
 # --- _coerce --------------------------------------------------------------
 
@@ -343,7 +339,7 @@ def test_handle_v1_getbulk_is_unsupported_returns_none(stocked_agent):
 def test_handle_garbage_returns_none(stocked_agent):
     # Random bytes — both v2c and v1 decoders fail; _handle currently
     # propagates that as an exception, but the agent's _run swallows.
-    with pytest.raises(Exception):
+    with pytest.raises(Exception):  # noqa: B017 — both v2c+v1 decoders raise generic pyasn1 errors
         stocked_agent._handle(b"this is not snmp at all")
 
 

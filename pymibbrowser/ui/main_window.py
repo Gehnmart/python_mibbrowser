@@ -38,7 +38,7 @@ from .. import workers
 from ..infra import config, snmp_ops
 from ..infra.config import Agent, AppSettings
 from ..infra.i18n import _t, set_language
-from ..infra.mib_loader import MibNode, MibTree
+from ..infra.mib_loader import MibNode
 from .mib_tree_model import FastMibFilterProxy, MibTreeModel
 from .result_table import ResultTableModel
 

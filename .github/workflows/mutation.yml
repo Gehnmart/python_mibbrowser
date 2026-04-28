@@ -1,0 +1,58 @@
+name: mutation
+
+# Mutation testing of the pure engine (pymibbrowser/engine/). Kept out
+# of the main `ci` workflow because each run takes ~1 minute and adds
+# nothing to per-PR feedback — the engine tests already gate behaviour
+# at the unit level. This job exists as a drift detector: if the
+# surviving-mutant count creeps up after a refactor, we want to know.
+#
+# Triggers:
+#   - Weekly (Mondays 06:00 UTC) — catches drift even with no commits.
+#   - Manual (workflow_dispatch) — run on demand.
+#   - Push to main when engine sources or engine tests change.
+
+on:
+  schedule:
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "pymibbrowser/engine/**"
+      - "tests/engine/**"
+      - "pyproject.toml"
+      - ".github/workflows/mutation.yml"
+
+jobs:
+  mutmut:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install deps
+        run: |
+          python -m pip install -U pip
+          pip install -e ".[dev]"
+
+      - name: Run mutmut on engine
+        run: mutmut run
+
+      - name: Show results
+        if: always()
+        run: mutmut results
+
+      - name: Fail if too many mutants survived
+        # Budget: 19 known-equivalent survivors documented in the
+        # commit history. Bump only after triaging new survivors and
+        # confirming they're equivalent (trampoline-default artefacts,
+        # cosmetic log strings, semantically equivalent error flags).
+        run: |
+          survived=$(mutmut results | grep -c ": survived" || true)
+          echo "Surviving mutants: $survived (budget: 19)"
+          test "$survived" -le 19

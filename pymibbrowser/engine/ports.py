@@ -7,18 +7,15 @@ shared state, no globals — each adapter holds its own state.
 """
 from __future__ import annotations
 
-from typing import Protocol
-
 from collections.abc import Callable
-
 from pathlib import Path
+from typing import Protocol
 
 from .model import (
     Agent,
     AppSettings,
     CompileResult,
     MibNodeView,
-    TrapEvent,
     VarBind,
 )
 
@@ -143,7 +140,7 @@ class MibStore(Protocol):
     is the engine's ``Resolver`` — same Protocol, freshly bound to the
     current tree state, so it stays valid across set_enabled() rebuilds."""
 
-    def resolver(self) -> "Resolver": ...
+    def resolver(self) -> Resolver: ...
 
     def available_modules(self) -> list[str]:
         """Every module the store knows about, whether enabled or not.

@@ -22,7 +22,6 @@ from pymibbrowser.infra.adapters import PysnmpTrapPublisher, UdpTrapSubscription
 from pymibbrowser.infra.adapters.traps import _to_engine_event
 from pymibbrowser.infra.trap_receiver import TrapEvent as RawTrapEvent
 
-
 # --- Publisher ------------------------------------------------------------
 
 class TestPysnmpTrapPublisher:
@@ -69,7 +68,7 @@ class TestPysnmpTrapPublisher:
         assert isinstance(val_a, rfc1902.Integer32)
         assert int(val_a) == 42
         # Second: string
-        oid_b, val_b = encoded[1]
+        _oid_b, val_b = encoded[1]
         assert isinstance(val_b, rfc1902.OctetString)
         assert bytes(val_b) == b"hello"
 

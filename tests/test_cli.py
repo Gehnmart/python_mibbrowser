@@ -8,10 +8,9 @@ import threading
 import pytest
 
 from pymibbrowser import cli
-from pymibbrowser.engine.model import Agent, VarBind
+from pymibbrowser.engine.model import VarBind
 from pymibbrowser.infra import snmp_ops
 from pymibbrowser.infra.snmp_ops import VarBind as RawVarBind
-
 
 # --- the architectural assertion ------------------------------------------
 
@@ -133,7 +132,7 @@ def test_run_with_save_writes_file(tmp_path, fresh_xdg, stub_pysnmp, capsys):
     assert out.exists()
     assert "TimeTicks" in out.read_text()
     # Logger announces the persist path.
-    assert f"saved" in capsys.readouterr().out
+    assert "saved" in capsys.readouterr().out
 
 
 # --- modules command -----------------------------------------------------

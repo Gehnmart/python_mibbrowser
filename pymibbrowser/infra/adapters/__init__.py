@@ -16,18 +16,18 @@ from .snmp import PysnmpTransport
 from .traps import PysnmpTrapPublisher, UdpTrapSubscription
 
 __all__ = [
-    "WallClock",
-    "FileSink",
-    "NullSink",
     "CallbackLogger",
-    "PrintLogger",
+    "FileSink",
     "JsonFileSettingsStore",
-    "default_settings_store",
     "MibTreeResolver",
     "MibTreeStore",
+    "NullSink",
     "NumericResolver",
+    "PrintLogger",
     "PysmiMibCompiler",
     "PysnmpTransport",
     "PysnmpTrapPublisher",
     "UdpTrapSubscription",
+    "WallClock",
+    "default_settings_store",
 ]

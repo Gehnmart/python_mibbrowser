@@ -20,7 +20,7 @@ class _DynamicResolver:
     store. Survives set_enabled() rebuilds — the captured store
     reference stays valid; the tree behind it changes."""
 
-    def __init__(self, store: "MibTreeStore") -> None:
+    def __init__(self, store: MibTreeStore) -> None:
         self._store = store
 
     def resolve(self, name_or_oid: str) -> tuple[int, ...] | None:

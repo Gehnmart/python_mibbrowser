@@ -6,13 +6,11 @@ from pymibbrowser.engine.ast import (
     GetNext,
     If,
     Save,
-    Script,
     Set,
     Sleep,
     Unknown,
 )
 from pymibbrowser.engine.parser import parse_command, parse_script
-
 
 # --- empty / comments ----------------------------------------------------
 
@@ -238,6 +236,7 @@ def test_script_is_immutable_dataclass():
     the same AST can be replayed safely."""
     s = parse_script("get 1.2.3.4 sysName.0")
     import dataclasses
+
     import pytest
     with pytest.raises(dataclasses.FrozenInstanceError):
         s.commands = ()       # type: ignore[misc]

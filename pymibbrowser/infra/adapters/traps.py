@@ -14,7 +14,6 @@ from .. import snmp_ops, trap_sender
 from ..trap_receiver import TrapEvent as _RawTrapEvent
 from ..trap_receiver import TrapListener
 
-
 # --- Publisher -----------------------------------------------------------
 
 class PysnmpTrapPublisher:

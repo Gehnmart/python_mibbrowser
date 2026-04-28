@@ -10,9 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from pymibbrowser.infra import mib_loader
 from pymibbrowser.infra.mib_loader import MibNode, MibTree
-
 
 # --- MibNode --------------------------------------------------------------
 
@@ -352,7 +350,7 @@ class TestLoadCompiled:
         t.load_compiled(tmp_path)
         # Stubs exist for every intermediate.
         for i in range(1, 6):
-            oid = (1, 3, 6, 1, 4, 1, 99999) + tuple(range(1, i))
+            oid = (1, 3, 6, 1, 4, 1, 99999, *tuple(range(1, i)))
             assert t.node_by_oid(oid) is not None or i == 1
         leaf = t.node_by_name("deepLeaf")
         assert leaf is not None

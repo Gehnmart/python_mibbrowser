@@ -22,7 +22,6 @@ from ...engine.model import (
 )
 from ..config import config_dir
 
-
 # Custom reconstructors for dataclass-typed fields. Plain fields
 # (str/int/bool/list[str]/dict) are handled generically below.
 _NESTED_LOADERS: dict[str, Callable[[Any], Any]] = {

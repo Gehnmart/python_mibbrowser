@@ -14,36 +14,35 @@ from pysnmp.proto import rfc1902
 from pymibbrowser.infra import trap_receiver
 from pymibbrowser.infra.trap_receiver import TrapEvent, TrapListener, _pp
 
-
 # --- accept-list ----------------------------------------------------------
 
 class TestAcceptList:
     def test_empty_means_accept_any(self):
-        l = TrapListener(accept_from="")
-        assert l._allowed("1.2.3.4") is True
-        assert l._allowed("203.0.113.1") is True
+        listener = TrapListener(accept_from="")
+        assert listener._allowed("1.2.3.4") is True
+        assert listener._allowed("203.0.113.1") is True
 
     def test_single_host(self):
-        l = TrapListener(accept_from="10.1.2.3")
-        assert l._allowed("10.1.2.3") is True
-        assert l._allowed("10.1.2.4") is False
+        listener = TrapListener(accept_from="10.1.2.3")
+        assert listener._allowed("10.1.2.3") is True
+        assert listener._allowed("10.1.2.4") is False
 
     def test_cidr(self):
-        l = TrapListener(accept_from="10.0.0.0/8, 192.168.1.5")
-        assert l._allowed("10.55.55.55") is True
-        assert l._allowed("192.168.1.5") is True
-        assert l._allowed("172.16.1.1") is False
+        listener = TrapListener(accept_from="10.0.0.0/8, 192.168.1.5")
+        assert listener._allowed("10.55.55.55") is True
+        assert listener._allowed("192.168.1.5") is True
+        assert listener._allowed("172.16.1.1") is False
 
     def test_invalid_token_logged_and_skipped(self, caplog):
         with caplog.at_level("WARNING"):
-            l = TrapListener(accept_from="not-an-ip, 10.0.0.0/8")
+            listener = TrapListener(accept_from="not-an-ip, 10.0.0.0/8")
         assert any("ignoring invalid" in r.message for r in caplog.records)
         # The valid token still applies.
-        assert l._allowed("10.5.5.5") is True
+        assert listener._allowed("10.5.5.5") is True
 
     def test_invalid_source_ip_rejected(self):
-        l = TrapListener(accept_from="10.0.0.0/8")
-        assert l._allowed("not-an-ip") is False
+        listener = TrapListener(accept_from="10.0.0.0/8")
+        assert listener._allowed("not-an-ip") is False
 
 
 # --- parsing v2c ----------------------------------------------------------
@@ -152,25 +151,25 @@ def free_port():
 
 def test_listener_start_stop_cycle(free_port):
     received: list[TrapEvent] = []
-    l = TrapListener(port=free_port, on_trap=received.append)
-    l.start()
+    listener = TrapListener(port=free_port, on_trap=received.append)
+    listener.start()
     try:
-        assert l.is_running()
+        assert listener.is_running()
         # Calling start a second time is a no-op (idempotent).
-        l.start()
+        listener.start()
     finally:
-        l.stop()
-    assert not l.is_running()
+        listener.stop()
+    assert not listener.is_running()
     # stop() is also idempotent — calling it twice must not raise.
-    l.stop()
+    listener.stop()
 
 
 def test_listener_receives_v2c_trap_end_to_end(free_port):
     """Send a real UDP packet to the listener and confirm it surfaces as
     a TrapEvent through the on_trap callback."""
     received: list[TrapEvent] = []
-    l = TrapListener(port=free_port, on_trap=received.append)
-    l.start()
+    listener = TrapListener(port=free_port, on_trap=received.append)
+    listener.start()
     try:
         data = _build_v2c_trap("private", "1.3.6.1.4.1.9999.42.0.1")
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -181,7 +180,7 @@ def test_listener_receives_v2c_trap_end_to_end(free_port):
         while not received and time.monotonic() < deadline:
             time.sleep(0.05)
     finally:
-        l.stop()
+        listener.stop()
     assert received, "no trap surfaced via callback"
     ev = received[0]
     assert ev.version == "2c"
@@ -194,9 +193,9 @@ def test_listener_drops_unmatched_source(free_port):
     """accept_from="192.168.99.99/32" → loopback packets are filtered out
     before parse, so the callback never fires."""
     received: list[TrapEvent] = []
-    l = TrapListener(port=free_port, on_trap=received.append,
+    listener = TrapListener(port=free_port, on_trap=received.append,
                       accept_from="192.168.99.99/32")
-    l.start()
+    listener.start()
     try:
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         s.sendto(_build_v2c_trap("public", "1.3.6.1.4.1.9999.0.1"),
@@ -204,25 +203,25 @@ def test_listener_drops_unmatched_source(free_port):
         s.close()
         time.sleep(0.7)
     finally:
-        l.stop()
+        listener.stop()
     assert received == []
 
 
 def test_listener_swallows_garbage_packet(free_port):
     """A non-SNMP UDP datagram must not crash the loop or fire the callback."""
     received: list[TrapEvent] = []
-    l = TrapListener(port=free_port, on_trap=received.append)
-    l.start()
+    listener = TrapListener(port=free_port, on_trap=received.append)
+    listener.start()
     try:
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         s.sendto(b"not an snmp packet at all", ("127.0.0.1", free_port))
         s.close()
         time.sleep(0.7)
     finally:
-        l.stop()
+        listener.stop()
     assert received == []
     # Listener is still healthy after the bad packet.
-    assert not l.is_running()
+    assert not listener.is_running()
 
 
 def test_listener_swallows_callback_exception(free_port):
@@ -233,8 +232,8 @@ def test_listener_swallows_callback_exception(free_port):
         calls["n"] += 1
         raise RuntimeError("callback boom")
 
-    l = TrapListener(port=free_port, on_trap=cb)
-    l.start()
+    listener = TrapListener(port=free_port, on_trap=cb)
+    listener.start()
     try:
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         for _ in range(2):
@@ -245,7 +244,7 @@ def test_listener_swallows_callback_exception(free_port):
         while calls["n"] < 2 and time.monotonic() < deadline:
             time.sleep(0.05)
     finally:
-        l.stop()
+        listener.stop()
     # Both packets reached the callback even though the first raised.
     assert calls["n"] == 2
 
@@ -264,7 +263,7 @@ def test_listener_permission_error_for_low_port(monkeypatch):
 
     monkeypatch.setattr(trap_receiver.socket, "socket",
                         lambda *a, **kw: _StubSock())
-    l = TrapListener(port=162)
+    listener = TrapListener(port=162)
     with pytest.raises(PermissionError, match="needs root"):
-        l.start()
-    assert not l.is_running()
+        listener.start()
+    assert not listener.is_running()

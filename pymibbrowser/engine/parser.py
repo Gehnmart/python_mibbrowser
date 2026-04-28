@@ -11,7 +11,6 @@ import re
 
 from .ast import Command, Get, GetNext, If, Save, Script, Set, Sleep, Unknown
 
-
 _IF_ERR_RE = re.compile(r"if\s+\$\s+err\s+(\w+)(?:\s+(.+))?$")
 _IF_CMP_RE = re.compile(
     r"if\s+\$\s+(>=|<=|!=|>|<|=)\s*(\S+)\s+(\w+)(?:\s+(.+))?$")

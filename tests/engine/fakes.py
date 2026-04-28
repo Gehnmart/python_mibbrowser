@@ -11,7 +11,6 @@ from typing import Any
 
 from pymibbrowser.engine.model import Agent, VarBind
 
-
 # --- Clock ---------------------------------------------------------------
 
 @dataclass

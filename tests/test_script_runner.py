@@ -96,7 +96,7 @@ def test_save_writes_buffered_lines_to_file(tmp_path, tree, stub_pysnmp):
     assert out.exists()
     body = out.read_text()
     assert "TimeTicks" in body and "123" in body
-    assert any(f"saved" in ln and str(out) in ln for ln in log)
+    assert any("saved" in ln and str(out) in ln for ln in log)
 
 
 def test_save_does_not_overwrite_existing_file(tmp_path, tree, stub_pysnmp):

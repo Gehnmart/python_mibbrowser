@@ -7,6 +7,7 @@ from typing import Any
 from PyQt6.QtCore import QObject, QThread, pyqtSignal
 
 from .infra import snmp_ops
+
 # Thread-lifecycle helpers used to live here. They moved to qt_safety so
 # the file has one job (workers); UI code keeps calling
 # ``workers.wait_if_running`` etc. via these re-exports.
@@ -19,11 +20,11 @@ from .qt_safety import (
 
 __all__ = [
     "SnmpWorker",
-    "run_op",
     "is_thread_alive",
-    "wait_if_running",
     "prune_threads",
+    "run_op",
     "shutdown_pools",
+    "wait_if_running",
 ]
 
 
