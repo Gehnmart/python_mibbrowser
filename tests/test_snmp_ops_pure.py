@@ -242,3 +242,52 @@ class TestRun:
             raise RuntimeError("not the loop one")
         with pytest.raises(RuntimeError, match="not the loop one"):
             snmp_ops._run(f())
+
+    def test_loop_persists_across_calls(self):
+        """The whole point of the runner: one loop, many submissions.
+        After two consecutive _run() calls the loop thread is still
+        the same — no per-call create/teardown."""
+        async def thread_id():
+            import threading
+            return threading.current_thread().ident
+        first = snmp_ops._run(thread_id())
+        second = snmp_ops._run(thread_id())
+        assert first == second
+        # And neither was the calling thread.
+        import threading as _t
+        assert first != _t.current_thread().ident
+
+    def test_shutdown_is_idempotent(self):
+        """Tests / process-cleanup paths may call shutdown() more than
+        once; second+ call must be a no-op, not a crash."""
+        runner = snmp_ops._LoopRunner()
+        # Never started — shutdown is a no-op.
+        runner.shutdown()
+        # Start, shutdown, shutdown again.
+        async def f():
+            return 1
+        assert runner.submit(f()) == 1
+        runner.shutdown()
+        runner.shutdown()
+
+    def test_submit_from_loop_thread_raises(self):
+        """A coroutine running on the loop must not call _run() — that
+        would block the loop on a future of its own work. We reject
+        the call rather than deadlock silently."""
+        runner = snmp_ops._LoopRunner()
+        try:
+            async def _noop():
+                return None
+            inner = _noop()
+            try:
+                async def reentrant():
+                    runner.submit(inner)
+                with pytest.raises(RuntimeError, match="loop thread"):
+                    runner.submit(reentrant())
+            finally:
+                # submit() rejected before scheduling, so close the
+                # never-awaited coroutine explicitly to avoid
+                # RuntimeWarning at GC time.
+                inner.close()
+        finally:
+            runner.shutdown()

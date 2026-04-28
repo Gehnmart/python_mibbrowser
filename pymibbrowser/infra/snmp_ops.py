@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import threading
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from typing import Any
@@ -393,19 +394,98 @@ async def async_set(agent: Agent, pairs: list[tuple[str, Any]]) -> list[VarBind]
 # Sync wrappers used by the UI
 # ---------------------------------------------------------------------------
 
-def _run(coro):
-    try:
-        return asyncio.run(coro)
-    except RuntimeError as exc:
-        # If an event loop is already running (unlikely in a QThread worker),
-        # fall back to a new loop in this thread.
-        if "already running" not in str(exc):
-            raise
-        loop = asyncio.new_event_loop()
+
+class _LoopRunner:
+    """Long-lived asyncio loop on a daemon thread.
+
+    The previous implementation called ``asyncio.run(coro)`` per op,
+    paying loop creation + DNS resolver startup + dispatcher init on
+    every GET. That's wasteful at the low end and a deadlock hazard
+    at the high end (any caller that already had a running loop would
+    fall through to a fresh loop on the same thread).
+
+    Pattern: lazy-start one loop on a background thread; submit each
+    coroutine via ``run_coroutine_threadsafe`` and block on the
+    Future. Engines created inside ``async_*`` helpers still live
+    only as long as the call (their ``close_dispatcher()`` runs at
+    the end of each coroutine), so resource ownership is unchanged
+    — only the loop persists.
+    """
+
+    def __init__(self) -> None:
+        self._loop: asyncio.AbstractEventLoop | None = None
+        self._thread: threading.Thread | None = None
+        self._lock = threading.Lock()
+
+    def _ensure_started(self) -> None:
+        with self._lock:
+            if self._loop is not None and not self._loop.is_closed():
+                return
+            ready = threading.Event()
+            err: list[BaseException] = []
+
+            def _main() -> None:
+                try:
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
+                    self._loop = loop
+                    ready.set()
+                    loop.run_forever()
+                except BaseException as e:
+                    # Propagate the failure back to the starter thread,
+                    # which is sleeping on `ready`. Without this catch
+                    # the loop thread would die silently and the starter
+                    # would just time out.
+                    err.append(e)
+                    ready.set()
+
+            self._thread = threading.Thread(
+                target=_main, name="snmp-ops-loop", daemon=True)
+            self._thread.start()
+            if not ready.wait(timeout=5.0):
+                raise RuntimeError("snmp-ops-loop failed to start within 5 s")
+            if err:
+                raise err[0]
+
+    def submit(self, coro: Any) -> Any:
+        """Run ``coro`` on the persistent loop and return its result.
+
+        Blocks the caller. Calling from the loop thread itself would
+        deadlock (the loop can't make progress while it's blocked on
+        a future of its own coroutine), so we reject that explicitly."""
+        self._ensure_started()
+        if threading.current_thread() is self._thread:
+            raise RuntimeError(
+                "snmp_ops._run cannot be called from the loop thread itself")
+        assert self._loop is not None
+        fut = asyncio.run_coroutine_threadsafe(coro, self._loop)
+        return fut.result()
+
+    def shutdown(self) -> None:
+        """Stop the loop and join the thread. Idempotent. Tests use
+        this for clean teardown; production never calls it (the
+        daemon thread dies with the process)."""
+        with self._lock:
+            loop = self._loop
+            thread = self._thread
+            self._loop = None
+            self._thread = None
+        if loop is None:
+            return
+        loop.call_soon_threadsafe(loop.stop)
+        if thread is not None:
+            thread.join(timeout=2.0)
         try:
-            return loop.run_until_complete(coro)
-        finally:
             loop.close()
+        except Exception:
+            pass
+
+
+_loop_runner = _LoopRunner()
+
+
+def _run(coro: Any) -> Any:
+    return _loop_runner.submit(coro)
 
 
 def op_get(agent: Agent, oids: list) -> list[VarBind]:
