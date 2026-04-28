@@ -6,7 +6,7 @@ materialising vendor-specific value objects.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 
 @dataclass
@@ -65,6 +65,83 @@ class TrapEvent:
     # but plain tuples to keep TrapEvent hashable.
     var_binds: tuple[tuple[str, str, str], ...] = ()
     raw_bytes: bytes = b""
+
+
+@dataclass
+class WatchDefinition:
+    """A single monitored OID with a 'normal-state' predicate. Pure data;
+    UI evaluates the predicate against incoming values."""
+    name: str = ""
+    oid: str = ""
+    operation: str = "Get"              # "Get" | "Get Next"
+    condition_op: str = ">"
+    condition_value: str = ""           # string; parsed as float if possible
+
+
+@dataclass
+class PollVariable:
+    """One variable inside a Poll definition."""
+    name: str = ""                      # display label, e.g. "sysUpTime"
+    oid: str = ""                       # dotted numeric or symbolic
+    operation: str = "Get"              # "Get" | "Get Next"
+
+
+@dataclass
+class PollDefinition:
+    """Periodic poll across one or more agents for a set of variables.
+    ``agents`` stores the agent identifier as ``host:port``; resolved
+    against AppSettings.saved_agents + current_agent at run time."""
+    name: str = ""
+    interval_s: int = 30
+    agents: list[str] = field(default_factory=list)
+    variables: list[PollVariable] = field(default_factory=list)
+
+
+@dataclass
+class AppSettings:
+    """All persistent application state. Pure data — persistence (load/
+    save, JSON serialisation, file paths) lives in a SettingsStore
+    adapter; nothing on this class touches the filesystem.
+
+    Backward-compat ``load()`` / ``save()`` methods are attached at
+    import time by ``pymibbrowser.infra.adapters.settings`` so existing
+    UI callers (``settings.save()``) keep working until the UI migrates
+    to SettingsStore explicitly."""
+
+    current_agent: Agent = field(default_factory=Agent)
+    # Template used as the starting point for new agents (Add in Manage
+    # agents, and the toolbar's Address combo on first use). Edited via
+    # Preferences → SNMP. Keeping it separate from current_agent means
+    # changing "defaults" doesn't rewrite the agent you're actively
+    # talking to.
+    default_agent: Agent = field(default_factory=Agent)
+    saved_agents: list[Agent] = field(default_factory=list)
+    loaded_mibs: list[str] = field(default_factory=list)
+    bookmarks: list[dict] = field(default_factory=list)
+    trap_port: int = 162
+    max_graph_points: int = 600
+    single_tree_root: bool = True
+    show_log_pane: bool = True
+    lenient_mib_parser: bool = True
+    logging_level: str = "INFO"
+    log_dir: str = ""    # "" = default under data_dir()/logs
+    language: str = ""   # "" = auto-detect from $LANG; "ru" | "en" to pin
+    # Explicit enable-list. None (stored as null) = all compiled MIBs are
+    # loaded into the tree. A list (possibly empty) narrows the tree to
+    # just those modules.
+    enabled_mibs: list[str] | None = None
+    # When compiling MIBs, fall back to https://mibs.pysnmp.com for any
+    # module not in the local source dirs.
+    fetch_missing_from_net: bool = False
+    polls: list[PollDefinition] = field(default_factory=list)
+    watches: list[WatchDefinition] = field(default_factory=list)
+    watch_interval_s: int = 15
+    # Comma-separated host/CIDR allow-list for the trap receiver; empty
+    # accepts any source.
+    trap_accept_from: str = ""
+    # MRU list of OIDs the user actually ran. Top is most recent;
+    # capped at 20 entries.
+    recent_oids: list[str] = field(default_factory=list)
 
 
 @dataclass(frozen=True)

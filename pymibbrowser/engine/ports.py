@@ -11,7 +11,7 @@ from typing import Protocol
 
 from collections.abc import Callable
 
-from .model import Agent, MibNodeView, TrapEvent, VarBind
+from .model import Agent, AppSettings, MibNodeView, TrapEvent, VarBind
 
 
 class SnmpTransport(Protocol):
@@ -87,6 +87,20 @@ class TrapSubscription(Protocol):
     def stop(self) -> None: ...
 
     def is_running(self) -> bool: ...
+
+
+class SettingsStore(Protocol):
+    """Persist application settings.
+
+    Two methods, both atomic from the caller's view: load() always
+    returns a usable AppSettings (defaults if no persisted state, also
+    defaults on read errors so a corrupt store can't brick startup);
+    save() must guarantee that a crash mid-write doesn't leave the
+    persisted state truncated."""
+
+    def load(self) -> AppSettings: ...
+
+    def save(self, settings: AppSettings) -> None: ...
 
 
 class MibStore(Protocol):

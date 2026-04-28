@@ -11,8 +11,10 @@ from PyQt6.QtWidgets import QApplication, QMessageBox, QProgressDialog
 from .infra import config, i18n, mib_loader
 
 
-def _setup_logging() -> None:
-    """Console + rotating file handler at ~/.local/share/pymibbrowser/logs/."""
+def _setup_logging(log_path: Path) -> None:
+    """Console + rotating file handler. ``log_path`` is the resolved
+    target — caller decides whether the user picked a custom directory
+    or the default applies."""
     from logging.handlers import RotatingFileHandler
     fmt = logging.Formatter(
         "%(asctime)s [%(levelname)s] %(name)s: %(message)s")
@@ -29,24 +31,23 @@ def _setup_logging() -> None:
     # File at DEBUG, rotated at 1 MB × 5 backups.
     try:
         fh = RotatingFileHandler(
-            str(config.log_file()),
+            str(log_path),
             maxBytes=1_000_000, backupCount=5, encoding="utf-8")
         fh.setLevel(logging.DEBUG)
         fh.setFormatter(fmt)
         root.addHandler(fh)
-        logging.getLogger(__name__).info(
-            "logging to %s", config.log_file())
+        logging.getLogger(__name__).info("logging to %s", log_path)
     except Exception as exc:
         logging.getLogger(__name__).warning(
             "file logging unavailable: %s", exc)
 
 
 def main() -> int:
-    # Settings must be loaded first so the log-dir override is honored
-    # by the file handler we create in _setup_logging().
+    # Resolve settings first so the file handler can write to the user's
+    # configured log directory (or the platform default if they haven't
+    # overridden it).
     settings = config.AppSettings.load()
-    config.set_log_dir_override(settings.log_dir or None)
-    _setup_logging()
+    _setup_logging(config.log_file(settings.log_dir or None))
     app = QApplication(sys.argv)
     app.setApplicationName("pymibbrowser")
 

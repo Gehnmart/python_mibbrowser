@@ -52,34 +52,41 @@ def test_compiled_mibs_dir_under_data(tmp_xdg):
     assert p.is_dir()
 
 
-def test_log_dir_default(tmp_xdg, monkeypatch):
-    """No override → logs/ under data_dir()."""
-    monkeypatch.setattr(config, "_log_dir_override", None)
+def test_log_dir_default(tmp_xdg):
+    """No custom path → logs/ under data_dir()."""
     p = config.log_dir()
     assert p == tmp_xdg / "data" / "pymibbrowser" / "logs"
     assert p.is_dir()
 
 
-def test_log_dir_with_override(tmp_path, tmp_xdg, monkeypatch):
+def test_log_dir_with_explicit_custom(tmp_path, tmp_xdg):
+    """Caller passes the custom path explicitly — no module global."""
     custom = tmp_path / "alt-logs"
-    config.set_log_dir_override(str(custom))
-    try:
-        assert config.log_dir() == custom
-        assert custom.is_dir()
-    finally:
-        config.set_log_dir_override(None)
+    p = config.log_dir(str(custom))
+    assert p == custom
+    assert custom.is_dir()
 
 
-def test_set_log_dir_override_clear():
-    """Passing None clears a previous override."""
-    config.set_log_dir_override("/tmp/whatever")
-    config.set_log_dir_override(None)
-    assert config._log_dir_override is None
+def test_log_dir_empty_custom_falls_back_to_default(tmp_xdg):
+    """Empty / None custom is treated as 'use the default'."""
+    assert config.log_dir(None) == tmp_xdg / "data" / "pymibbrowser" / "logs"
+    assert config.log_dir("") == tmp_xdg / "data" / "pymibbrowser" / "logs"
 
 
-def test_log_file_under_log_dir(tmp_xdg, monkeypatch):
-    monkeypatch.setattr(config, "_log_dir_override", None)
-    assert config.log_file() == tmp_xdg / "data" / "pymibbrowser" / "logs" / "pymibbrowser.log"
+def test_log_file_default(tmp_xdg):
+    expected = tmp_xdg / "data" / "pymibbrowser" / "logs" / "pymibbrowser.log"
+    assert config.log_file() == expected
+
+
+def test_log_file_with_custom_dir(tmp_path, tmp_xdg):
+    custom = tmp_path / "alt-logs"
+    assert config.log_file(str(custom)) == custom / "pymibbrowser.log"
+
+
+def test_no_module_globals_for_log_dir():
+    """Hexagonal discipline: no _log_dir_override-style hidden state."""
+    assert not hasattr(config, "_log_dir_override")
+    assert not hasattr(config, "set_log_dir_override")
 
 
 def test_project_root_resolves_above_package():

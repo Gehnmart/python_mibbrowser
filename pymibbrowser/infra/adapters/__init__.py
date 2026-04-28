@@ -10,6 +10,9 @@ from .file_sink import FileSink, NullSink
 from .logger import CallbackLogger, PrintLogger
 from .mib_store import MibTreeStore
 from .resolver import MibTreeResolver, NumericResolver
+# Importing this module installs the AppSettings.load/save back-compat
+# shims — keep it before any caller tries to use them.
+from .settings import JsonFileSettingsStore, default_settings_store
 from .snmp import PysnmpTransport
 from .traps import PysnmpTrapPublisher, UdpTrapSubscription
 
@@ -19,6 +22,8 @@ __all__ = [
     "NullSink",
     "CallbackLogger",
     "PrintLogger",
+    "JsonFileSettingsStore",
+    "default_settings_store",
     "MibTreeResolver",
     "MibTreeStore",
     "NumericResolver",
