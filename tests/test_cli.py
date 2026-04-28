@@ -3,11 +3,12 @@ architectural guarantee that the CLI doesn't drag in Qt."""
 from __future__ import annotations
 
 import sys
+import threading
 
 import pytest
 
 from pymibbrowser import cli
-from pymibbrowser.engine.model import Agent
+from pymibbrowser.engine.model import Agent, VarBind
 from pymibbrowser.infra import snmp_ops
 from pymibbrowser.infra.snmp_ops import VarBind as RawVarBind
 
@@ -172,3 +173,179 @@ def test_modules_lists_available(fresh_xdg, capsys, monkeypatch):
     assert rc == 0
     out = capsys.readouterr().out
     assert "A-MIB" in out and "B-MIB" in out
+
+
+# --- walk command ---------------------------------------------------------
+
+class TestWalk:
+    def test_walk_iterates_until_subtree_exhausted(self, fresh_xdg, capsys,
+                                                     monkeypatch):
+        """Stub PysnmpTransport.get_next so the walk loop sees three
+        in-subtree responses then one outside-subtree (terminator)."""
+        rounds = iter([
+            [VarBind(oid=(1, 3, 6, 1, 2, 1, 1, 1, 0),
+                     type_name="STRING", display_value="a")],
+            [VarBind(oid=(1, 3, 6, 1, 2, 1, 1, 2, 0),
+                     type_name="STRING", display_value="b")],
+            [VarBind(oid=(1, 3, 6, 1, 2, 1, 99, 0, 0),    # outside subtree
+                     type_name="STRING", display_value="esc")],
+        ])
+
+        class _StubTransport:
+            def get(self, *_a, **_kw): return []
+            def get_next(self, _agent, oids):
+                return next(rounds)
+            def set(self, *_a, **_kw): return []
+
+        monkeypatch.setattr(cli, "PysnmpTransport", lambda: _StubTransport())
+
+        rc = cli.main(["walk", "1.3.6.1.2.1.1"])
+        assert rc == 0
+        out = capsys.readouterr().out.splitlines()
+        # 2 in-subtree varbinds printed; the third response left the
+        # subtree so the walk stopped before printing it.
+        assert len(out) == 2
+        assert "1.3.6.1.2.1.1.1.0" in out[0]
+        assert "1.3.6.1.2.1.1.2.0" in out[1]
+
+    def test_walk_unresolvable_oid_returns_2(self, fresh_xdg, capsys):
+        rc = cli.main(["walk", "totally-unknown-symbol"])
+        assert rc == 2
+        assert "cannot resolve" in capsys.readouterr().err
+
+    def test_walk_transport_error_returns_1(self, fresh_xdg, capsys,
+                                              monkeypatch):
+        class _Boom:
+            def get(self, *_a, **_kw): return []
+            def get_next(self, *_a, **_kw):
+                raise RuntimeError("agent unreachable")
+            def set(self, *_a, **_kw): return []
+
+        monkeypatch.setattr(cli, "PysnmpTransport", lambda: _Boom())
+        rc = cli.main(["walk", "1.3.6.1"])
+        assert rc == 1
+        assert "agent unreachable" in capsys.readouterr().err
+
+
+# --- compile-mibs command -------------------------------------------------
+
+class TestCompileMibs:
+    @pytest.fixture
+    def stub_compiler(self, monkeypatch):
+        from pymibbrowser.engine.model import CompileResult
+        calls: dict = {"compile": []}
+
+        class _StubCompiler:
+            def __init__(self, cache_dir): self._cache = cache_dir
+            def discover(self, sources): return ["FOO-MIB", "BAR-MIB"]
+            def compile(self, modules, sources, *, rebuild=False,
+                         use_network=False, on_progress=None,
+                         should_cancel=None):
+                calls["compile"].append({
+                    "modules": modules, "rebuild": rebuild,
+                    "use_network": use_network})
+                results = [CompileResult(module=m, status="compiled")
+                           for m in modules]
+                if on_progress is not None:
+                    for i, r in enumerate(results, 1):
+                        on_progress(r, i, len(results))
+                return results
+
+        monkeypatch.setattr(cli, "PysmiMibCompiler", _StubCompiler)
+        return calls
+
+    def test_compile_default_source(self, fresh_xdg, capsys, stub_compiler):
+        rc = cli.main(["compile-mibs"])
+        assert rc == 0
+        # default --source falls back to bundled mibs-src/.
+        assert stub_compiler["compile"]
+        assert stub_compiler["compile"][0]["use_network"] is False
+        out = capsys.readouterr().out
+        assert "FOO-MIB" in out and "BAR-MIB" in out
+
+    def test_compile_with_network_and_rebuild(self, fresh_xdg, capsys,
+                                                 stub_compiler):
+        rc = cli.main(["compile-mibs", "--use-network", "--rebuild"])
+        assert rc == 0
+        assert stub_compiler["compile"][0]["use_network"] is True
+        assert stub_compiler["compile"][0]["rebuild"] is True
+
+    def test_compile_returns_1_when_module_fails(self, fresh_xdg, capsys,
+                                                    monkeypatch):
+        from pymibbrowser.engine.model import CompileResult
+
+        class _StubCompiler:
+            def __init__(self, *_a, **_kw): pass
+            def discover(self, _s): return ["BAD-MIB"]
+            def compile(self, modules, sources, *, rebuild=False,
+                         use_network=False, on_progress=None,
+                         should_cancel=None):
+                r = CompileResult(module="BAD-MIB", status="failed: parse error")
+                if on_progress is not None:
+                    on_progress(r, 1, 1)
+                return [r]
+
+        monkeypatch.setattr(cli, "PysmiMibCompiler", _StubCompiler)
+        rc = cli.main(["compile-mibs"])
+        assert rc == 1
+        err = capsys.readouterr().err
+        assert "BAD-MIB" in err and "failed" in err
+
+    def test_compile_returns_2_when_no_sources(self, fresh_xdg, capsys,
+                                                  monkeypatch):
+        class _Empty:
+            def __init__(self, *_a, **_kw): pass
+            def discover(self, _s): return []
+            def compile(self, *_a, **_kw): return []
+        monkeypatch.setattr(cli, "PysmiMibCompiler", _Empty)
+        rc = cli.main(["compile-mibs"])
+        assert rc == 2
+        assert "no MIB sources found" in capsys.readouterr().err
+
+
+# --- sniff-traps command --------------------------------------------------
+
+class TestSniffTraps:
+    def test_sniff_starts_subscription_then_stops_on_interrupt(
+            self, fresh_xdg, capsys, monkeypatch):
+        """Replace UdpTrapSubscription with a stub; simulate Ctrl-C
+        during the wait loop by raising KeyboardInterrupt from
+        threading.Event.wait."""
+        started = {"v": False}; stopped = {"v": False}
+
+        class _StubSub:
+            def __init__(self, port, on_trap, accept_from=""):
+                self.port = port
+            def start(self): started["v"] = True
+            def stop(self):  stopped["v"] = True
+            def is_running(self): return started["v"] and not stopped["v"]
+
+        monkeypatch.setattr(cli, "UdpTrapSubscription", _StubSub)
+
+        # Force the wait loop to bail immediately by raising KeyboardInterrupt
+        # the first time stop.wait fires.
+        real_event = threading.Event
+        class _BailingEvent(real_event):
+            def wait(self, timeout=None):
+                raise KeyboardInterrupt
+        monkeypatch.setattr(cli.threading, "Event", _BailingEvent)
+
+        rc = cli.main(["sniff-traps", "--port", "1162"])
+        assert rc == 0
+        assert started["v"] and stopped["v"]
+        # Banner printed before listen.
+        assert "1162" in capsys.readouterr().out
+
+    def test_sniff_permission_error_returns_1(self, fresh_xdg, capsys,
+                                                monkeypatch):
+        class _NoPerm:
+            def __init__(self, **_kw): pass
+            def start(self):
+                raise PermissionError("Cannot bind port 162")
+            def stop(self): pass
+            def is_running(self): return False
+
+        monkeypatch.setattr(cli, "UdpTrapSubscription", lambda **kw: _NoPerm())
+        rc = cli.main(["sniff-traps"])
+        assert rc == 1
+        assert "Cannot bind port 162" in capsys.readouterr().err
