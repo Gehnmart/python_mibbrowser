@@ -19,10 +19,11 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from .. import snmp_ops, workers
-from ..config import Agent
-from ..i18n import _t
-from ..mib_loader import MibTree
+from .. import workers
+from ..core import snmp_ops
+from ..core.config import Agent
+from ..core.i18n import _t
+from ..core.mib_loader import MibTree
 
 
 class TableDataModel(QAbstractTableModel):

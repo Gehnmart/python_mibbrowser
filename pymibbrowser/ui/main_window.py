@@ -34,10 +34,11 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from .. import snmp_ops, workers
-from ..config import Agent, AppSettings
-from ..i18n import _t, set_language
-from ..mib_loader import MibNode, MibTree
+from .. import workers
+from ..core import snmp_ops
+from ..core.config import Agent, AppSettings
+from ..core.i18n import _t, set_language
+from ..core.mib_loader import MibNode, MibTree
 from .mib_tree_model import FastMibFilterProxy, MibTreeModel
 from .result_table import ResultTableModel
 
@@ -758,7 +759,7 @@ class MibBrowserWindow(QMainWindow):
             return
         ag = self.settings.saved_agents[idx]
         # Reuse the dup-aware path from AgentsDialog.Use selected.
-        from ..config import Agent
+        from ..core.config import Agent
         self.settings.current_agent = Agent(**vars(ag))
         self.addr_edit.setCurrentText(f"{ag.host}:{ag.port}")
         self.version_combo.setCurrentText(ag.version)
@@ -1286,7 +1287,7 @@ class MibBrowserWindow(QMainWindow):
             "MIB (*.mib *.my *.txt *.smi);;All (*)")
         if not files:
             return
-        from .. import config
+        from ..core import config
         from .mib_load_dialog import MibLoadDialog
 
         src_paths = [Path(f) for f in files]
@@ -1650,7 +1651,7 @@ class MibBrowserWindow(QMainWindow):
 
     def _add_to_watches(self, n) -> None:
         """Entrance point from tree / result-row context menu."""
-        from ..config import WatchDefinition
+        from ..core.config import WatchDefinition
         from .watches_tab import AddWatchDialog
         seed = WatchDefinition(
             name=n.name,
@@ -1863,7 +1864,7 @@ class MibBrowserWindow(QMainWindow):
         from PyQt6.QtCore import QUrl
         from PyQt6.QtGui import QDesktopServices
 
-        from .. import config
+        from ..core import config
         path = config.log_file()
         if not path.exists():
             QMessageBox.information(self, _t("Open log file…"),
@@ -1893,7 +1894,7 @@ class MibBrowserWindow(QMainWindow):
         self.result_model.set_tree(self.tree)
 
     def _reload_mib_tree(self) -> None:
-        from .. import config, mib_loader
+        from ..core import config, mib_loader
         new_tree = mib_loader.MibTree()
         new_tree.load_compiled(config.compiled_mibs_dir(),
                                enabled=self.settings.enabled_mibs)
@@ -1912,7 +1913,7 @@ class MibBrowserWindow(QMainWindow):
         from PyQt6.QtCore import QObject, QThread, pyqtSignal
         from PyQt6.QtWidgets import QCheckBox, QDialog, QDialogButtonBox, QVBoxLayout
 
-        from .. import mib_loader
+        from ..core import mib_loader
 
         # Tiny modal: confirm + offer network fallback. Local-only by default.
         d = QDialog(self); d.setWindowTitle(_t("Recompile all MIBs…"))
@@ -1971,8 +1972,8 @@ class MibBrowserWindow(QMainWindow):
             # We know how many modules were in mibs-src/ (we iterate them).
             # pysmi may have pulled in additional transitive deps — count
             # them separately so the user isn't confused.
-            from .. import config as _cfg
-            from .. import mib_loader as _ml
+            from ..core import config as _cfg
+            from ..core import mib_loader as _ml
             src_modules = set(
                 _ml._discover_modules([_cfg.default_mibs_src()]))
             total_loaded = len(new_tree.modules)

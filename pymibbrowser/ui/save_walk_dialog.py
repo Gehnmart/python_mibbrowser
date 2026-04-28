@@ -30,9 +30,10 @@ from PyQt6.QtWidgets import (
     QVBoxLayout,
 )
 
-from .. import snmp_ops, workers
-from ..config import Agent
-from ..i18n import _t
+from .. import workers
+from ..core import snmp_ops
+from ..core.config import Agent
+from ..core.i18n import _t
 
 # Mapping from VarBind.type_name → snmpwalk "<TYPE>" token. Anything not
 # explicitly named falls back to STRING (matches snmpwalk default).

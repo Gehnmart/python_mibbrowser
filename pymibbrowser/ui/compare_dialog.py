@@ -40,9 +40,10 @@ from PyQt6.QtWidgets import (
     QVBoxLayout,
 )
 
-from .. import snmp_ops, workers
-from ..config import Agent, AppSettings
-from ..i18n import _t
+from .. import workers
+from ..core import snmp_ops
+from ..core.config import Agent, AppSettings
+from ..core.i18n import _t
 
 # ---------------------------------------------------------------------------
 # Walk-file parsing (snmpwalk -Oq / our SaveWalkDialog output format)

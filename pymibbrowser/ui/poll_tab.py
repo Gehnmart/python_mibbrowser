@@ -19,9 +19,10 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from .. import snmp_ops, workers
-from ..config import Agent, AppSettings, PollDefinition
-from ..i18n import _t
+from .. import workers
+from ..core import snmp_ops
+from ..core.config import Agent, AppSettings, PollDefinition
+from ..core.i18n import _t
 
 
 def _agent_key(a: Agent) -> str:

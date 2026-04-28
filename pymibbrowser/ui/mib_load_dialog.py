@@ -25,7 +25,7 @@ from PyQt6.QtWidgets import (
     QVBoxLayout,
 )
 
-from ..i18n import _t
+from ..core.i18n import _t
 
 STATUS_COLORS = {
     "compiled":    QColor("#6f6"),
@@ -59,7 +59,7 @@ class _CompileWorker(QObject):
         try:
             # compile_modules uses one big .compile(*mods) call which doesn't
             # emit per-module progress. Loop ourselves so we can report.
-            from pymibbrowser import config, mib_loader
+            from pymibbrowser.core import config, mib_loader
             dest = config.compiled_mibs_dir()
             src_dirs = [*list(self._extra), config.default_mibs_src()]
             compiler = mib_loader._make_compiler(
@@ -109,7 +109,7 @@ class MibLoadDialog(QDialog):
         self.net_chk = QCheckBox("Fetch missing deps from mibs.pysnmp.com")
         # Default follows the user's global preference (off by default — so
         # the app doesn't silently go to the internet on every Load MIB).
-        from .. import config as _cfg
+        from ..core import config as _cfg
         try:
             s = _cfg.AppSettings.load()
             self.net_chk.setChecked(s.fetch_missing_from_net)

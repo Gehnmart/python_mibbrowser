@@ -37,10 +37,10 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from .. import config
-from ..i18n import _t
-from ..mib_loader import MibTree
-from ..trap_receiver import TrapEvent, TrapListener
+from ..core import config
+from ..core.i18n import _t
+from ..core.mib_loader import MibTree
+from ..core.trap_receiver import TrapEvent, TrapListener
 
 
 @dataclass

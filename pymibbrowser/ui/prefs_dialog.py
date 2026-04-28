@@ -33,8 +33,8 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from .. import config
-from ..i18n import _t
+from ..core import config
+from ..core.i18n import _t
 
 LANG_CHOICES = (("(auto — $LANG)", ""), ("English", "en"), ("Русский", "ru"))
 LOG_LEVELS = ("DEBUG", "INFO", "WARNING", "ERROR")
@@ -326,7 +326,7 @@ class PreferencesDialog(QDialog):
             self.log_dir_edit.setText(d)
 
     def _reset_log_dir(self) -> None:
-        from .. import config as cfg
+        from ..core import config as cfg
         prev = cfg._log_dir_override
         cfg._log_dir_override = None
         try:

@@ -34,3 +34,4 @@ logs/
 # Local screenshots / scratch
 /tmp-*/
 screenshot*.png
+.coverage

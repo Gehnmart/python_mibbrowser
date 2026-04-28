@@ -33,9 +33,10 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from .. import snmp_ops, workers
-from ..config import AppSettings
-from ..i18n import _t
+from .. import workers
+from ..core import snmp_ops
+from ..core.config import AppSettings
+from ..core.i18n import _t
 
 # ifTable (RFC 2863) columns.
 _IF_DESCR       = (1, 3, 6, 1, 2, 1, 2, 2, 1, 2)

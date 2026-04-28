@@ -41,9 +41,10 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from .. import config, snmp_ops, workers
-from ..config import AppSettings, WatchDefinition
-from ..i18n import _t
+from .. import workers
+from ..core import config, snmp_ops
+from ..core.config import AppSettings, WatchDefinition
+from ..core.i18n import _t
 
 
 def _history_path() -> Path:

@@ -31,9 +31,9 @@ from PyQt6.QtWidgets import (
     QVBoxLayout,
 )
 
-from .. import config
-from ..i18n import _t
-from ..mib_loader import STUB_MIBS
+from ..core import config
+from ..core.i18n import _t
+from ..core.mib_loader import STUB_MIBS
 
 # Short blurbs for pysmi's built-in stub modules so clicking through to them
 # from "Imports from" actually shows something.

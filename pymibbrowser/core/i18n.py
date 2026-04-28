@@ -2,7 +2,7 @@
 Tiny dict-based internationalisation.
 
 Usage:
-    from pymibbrowser.i18n import _t
+    from pymibbrowser.core.i18n import _t
     label = _t("Filter MIB tree (substring)…")
 
 init_language() is called from main(); it picks "ru" if $LANG starts with

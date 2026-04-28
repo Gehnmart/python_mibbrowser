@@ -7,9 +7,9 @@ from __future__ import annotations
 
 import pytest
 
-from pymibbrowser import script_runner
-from pymibbrowser.config import Agent
-from pymibbrowser.snmp_ops import VarBind
+from pymibbrowser.core import script_runner
+from pymibbrowser.core.config import Agent
+from pymibbrowser.core.snmp_ops import VarBind
 
 
 class _Tree:
@@ -142,7 +142,7 @@ def test_cancel_breaks_out_of_sleep(tmp_path, stub_snmp, tree,
     # Simulate a user-cancel mid-sleep. We monkeypatch time.sleep to
     # set the cancel flag after the first chunk; the script should
     # abort with a [cancelled] log line and not run the next command.
-    from pymibbrowser import script_runner as sr
+    from pymibbrowser.core import script_runner as sr
     cancelled_flag = {"v": False}
 
     sleeps: list[float] = []
