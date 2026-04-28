@@ -163,3 +163,181 @@ def test_cancel_breaks_out_of_sleep(tmp_path, stub_snmp, tree,
     assert len(sleeps) == 1
     assert any("[cancelled]" in ln for ln in log)
     assert not stub_snmp["get"]
+
+
+# ---------------------------------------------------------------------------
+# Edge-case coverage: save command, unknown ops, error branches,
+# action types, parsing failures.
+# ---------------------------------------------------------------------------
+
+
+def test_unknown_command_is_logged(tmp_path, stub_snmp, tree):
+    log = _run(tmp_path, "frobnicate 127.0.0.1\n", tree)
+    assert any("unknown command" in ln for ln in log)
+
+
+def test_save_writes_results_to_file(tmp_path, stub_snmp, tree):
+    """save <path> followed by gets: the values are buffered and written at
+    the end of the script."""
+    out = tmp_path / "results.txt"
+    log = _run(tmp_path,
+               f"save {out}\nget 127.0.0.1 sysUpTime.0\n", tree)
+    assert out.exists()
+    body = out.read_text()
+    assert "sysUpTime" in body or ".1.3.6.1.2.1.1.3.0" in body
+    assert any(f"saved" in ln and str(out) in ln for ln in log)
+
+
+def test_save_to_existing_path_picks_unique_name(tmp_path, stub_snmp, tree):
+    """When the target file already exists, _flush_save appends .1 / .2 /
+    ... until it finds a free slot — never overwrites."""
+    out = tmp_path / "results.txt"
+    out.write_text("pre-existing")
+    _run(tmp_path,
+         f"save {out}\nget 127.0.0.1 sysUpTime.0\n", tree)
+    # Original file untouched, one of the .N variants exists.
+    assert out.read_text() == "pre-existing"
+    assert any(p.name.startswith("results.txt.") for p in tmp_path.iterdir())
+
+
+def test_save_without_results_skips_flush(tmp_path, stub_snmp, tree):
+    out = tmp_path / "empty.txt"
+    _run(tmp_path, f"save {out}\n", tree)
+    assert not out.exists()
+
+
+def test_get_exception_sets_last_error_and_logs(tmp_path, stub_snmp, tree,
+                                                  monkeypatch):
+    def boom(*_a, **_kw):
+        raise RuntimeError("agent unreachable")
+    monkeypatch.setattr(script_runner.snmp_ops, "op_get", boom)
+    log = _run(tmp_path,
+               "get 127.0.0.1 sysUpTime.0\n"
+               "if $ err sleep 0.05\n", tree, log=[])
+    assert any("agent unreachable" in ln for ln in log)
+
+
+def test_if_err_branch_fires_after_failure(tmp_path, stub_snmp, tree,
+                                              monkeypatch):
+    # Two stages: a failing get, then `if $ err sleep 0.1`.
+    sleeps: list[float] = []
+    monkeypatch.setattr(script_runner.time, "sleep",
+                        lambda s: sleeps.append(s))
+
+    def boom(*_a, **_kw):
+        raise RuntimeError("net down")
+    monkeypatch.setattr(script_runner.snmp_ops, "op_get", boom)
+    _run(tmp_path,
+         "get 127.0.0.1 sysUpTime.0\n"
+         "if $ err sleep 0.1\n", tree)
+    assert sleeps and abs(sum(sleeps) - 0.1) < 1e-6
+
+
+def test_invalid_if_syntax_logged_and_skipped(tmp_path, stub_snmp, tree):
+    log = _run(tmp_path,
+               "get 127.0.0.1 sysUpTime.0\n"
+               "if not-a-real-if-syntax\n", tree)
+    assert any("invalid if" in ln for ln in log)
+
+
+def test_if_with_unparseable_numeric_skipped_gracefully(tmp_path, stub_snmp,
+                                                          tree, monkeypatch):
+    """When last_result isn't numeric, comparison silently no-ops."""
+    sleeps: list[float] = []
+    monkeypatch.setattr(script_runner.time, "sleep",
+                        lambda s: sleeps.append(s))
+
+    def op_get(_a, oids):
+        # Return a non-numeric display string.
+        from pymibbrowser.core.snmp_ops import VarBind
+        return [VarBind(oid=oids[0], type_name="STRING", value=None,
+                         display_value="not-a-number")]
+    monkeypatch.setattr(script_runner.snmp_ops, "op_get", op_get)
+    _run(tmp_path,
+         "get 127.0.0.1 sysUpTime.0\n"
+         "if $ > 50 sleep 1\n", tree)
+    # Comparison failed → action did not fire.
+    assert sleeps == []
+
+
+def test_if_skips_when_no_prior_command(tmp_path, stub_snmp, tree,
+                                          monkeypatch):
+    """An `if` before any get/set has nothing to compare → noop."""
+    sleeps: list[float] = []
+    monkeypatch.setattr(script_runner.time, "sleep",
+                        lambda s: sleeps.append(s))
+    _run(tmp_path, "if $ > 50 sleep 1\n", tree)
+    assert sleeps == []
+
+
+def test_if_action_sound_outputs_bell(tmp_path, stub_snmp, tree, capsys):
+    _run(tmp_path,
+         "get 127.0.0.1 sysUpTime.0\n"
+         "if $ > 50 sound x\n", tree)
+    out, _err = capsys.readouterr()
+    assert "\a" in out
+
+
+def test_if_action_email_logged_as_skipped(tmp_path, stub_snmp, tree):
+    log = _run(tmp_path,
+               "get 127.0.0.1 sysUpTime.0\n"
+               "if $ > 50 email admin@example.com\n", tree)
+    assert any("email action" in ln and "admin@example.com" in ln
+               for ln in log)
+
+
+def test_bad_sleep_is_logged_and_does_not_crash(tmp_path, stub_snmp, tree):
+    log = _run(tmp_path, "sleep not-a-number\n", tree)
+    assert any("bad sleep" in ln for ln in log)
+
+
+def test_set_with_unresolved_oid_skipped_per_triple(tmp_path, stub_snmp, tree):
+    log = _run(tmp_path,
+               "set 127.0.0.1 nope-not-real s value\n", tree)
+    assert any("unresolved OID" in ln for ln in log)
+    assert not stub_snmp["set"]
+
+
+def test_set_with_bad_value_logged(tmp_path, stub_snmp, tree, monkeypatch):
+    """build_set_value raising must be caught and the triple skipped, but
+    the rest of the script continues."""
+    from pymibbrowser.core import snmp_ops as so
+
+    def explode(tag, val):
+        raise ValueError("not a number")
+    monkeypatch.setattr(script_runner.snmp_ops, "build_set_value", explode)
+    log = _run(tmp_path,
+               "set 127.0.0.1 sysContact.0 i bogus\n", tree)
+    assert any("bad set value" in ln for ln in log)
+
+
+def test_set_op_exception_logged(tmp_path, stub_snmp, tree, monkeypatch):
+    def boom(*_a, **_kw):
+        raise RuntimeError("write denied")
+    monkeypatch.setattr(script_runner.snmp_ops, "op_set", boom)
+    log = _run(tmp_path,
+               "set 127.0.0.1 sysContact.0 s hello\n", tree)
+    assert any("write denied" in ln for ln in log)
+
+
+def test_set_logs_response_on_success(tmp_path, stub_snmp, tree, monkeypatch):
+    """When op_set returns varbinds, each is logged on its own line."""
+    from pymibbrowser.core.snmp_ops import VarBind
+
+    def op_set(_agent, _pairs):
+        return [VarBind(oid=(1, 3, 6, 1, 2, 1, 1, 4, 0),
+                         type_name="STRING", value=None,
+                         display_value="hello")]
+    monkeypatch.setattr(script_runner.snmp_ops, "op_set", op_set)
+    log = _run(tmp_path,
+               "set 127.0.0.1 sysContact.0 s hello\n", tree)
+    assert any("STRING" in ln and "hello" in ln for ln in log)
+
+
+def test_default_logger_prints_to_stdout(tmp_path, stub_snmp, tree, capsys):
+    """When no logger callback is given, run() prints directly."""
+    script = tmp_path / "s.txt"
+    script.write_text("get 127.0.0.1 sysUpTime.0\n")
+    script_runner.run(str(script), Agent(host="127.0.0.1"), tree)
+    out, _err = capsys.readouterr()
+    assert ".1.3.6.1.2.1.1.3.0" in out or "TimeTicks" in out

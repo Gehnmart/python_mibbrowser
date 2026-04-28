@@ -88,11 +88,22 @@ def run(path: str, agent: Agent, tree: MibTree,
         if op == "if":
             if last_result is None and last_error == 0:
                 continue
-            m = re.match(r"if\s+\$\s+(err|>|<|>=|<=|!=|=)\s*(\S*)\s+(\w+)(?:\s+(.+))?", line)
-            if not m:
-                log(f"skip: invalid if: {line}")
-                continue
-            pred, operand, action, arg = m.groups()
+            # `if $ err <action> [arg]` — error predicate, no operand. Try
+            # this first so the comparison regex below doesn't mis-eat the
+            # action token as the operand.
+            m = re.match(r"if\s+\$\s+err\s+(\w+)(?:\s+(.+))?", line)
+            if m:
+                pred = "err"
+                operand = ""
+                action, arg = m.groups()
+            else:
+                m = re.match(
+                    r"if\s+\$\s+(>=|<=|!=|>|<|=)\s*(\S+)\s+(\w+)(?:\s+(.+))?",
+                    line)
+                if not m:
+                    log(f"skip: invalid if: {line}")
+                    continue
+                pred, operand, action, arg = m.groups()
             ok = False
             if pred == "err":
                 ok = last_error != 0

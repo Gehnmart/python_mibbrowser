@@ -54,7 +54,8 @@ def log_file() -> Path:
 
 
 def project_root() -> Path:
-    return Path(__file__).resolve().parent.parent
+    # core/config.py → core/ → pymibbrowser/ → repo root
+    return Path(__file__).resolve().parent.parent.parent
 
 
 def default_mibs_src() -> Path:
