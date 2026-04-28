@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pytest
 
+from pymibbrowser.infra import config
 from pymibbrowser.infra.config import (
     Agent,
     AppSettings,
@@ -26,8 +27,8 @@ def tmp_xdg(tmp_path, monkeypatch):
 
 def test_empty_roundtrip(tmp_xdg):
     s = AppSettings()
-    s.save()
-    loaded = AppSettings.load()
+    config.save_settings(s)
+    loaded = config.load_settings()
     assert loaded.current_agent.host == s.current_agent.host
     assert loaded.saved_agents == []
     assert loaded.polls == []
@@ -55,9 +56,9 @@ def test_roundtrip_preserves_all_collections(tmp_xdg):
     s.recent_oids = [".1.3.6.1.2.1.1.3.0", ".1.3.6.1.2.1.2.2.1.10.1"]
     s.language = "ru"
     s.watch_interval_s = 23
-    s.save()
+    config.save_settings(s)
 
-    loaded = AppSettings.load()
+    loaded = config.load_settings()
     assert loaded.current_agent.host == "1.2.3.4"
     assert loaded.current_agent.read_community == "secret"
     assert len(loaded.saved_agents) == 1
@@ -78,7 +79,7 @@ def test_save_is_atomic(tmp_xdg, monkeypatch):
     simulate a crash between the tmp-write and the rename — settings.json
     should still be the previous good version (or absent)."""
     s = AppSettings()
-    s.save()
+    config.save_settings(s)
     original = (tmp_xdg / "config" / "pymibbrowser" /
                 "settings.json").read_text()
 
@@ -93,7 +94,7 @@ def test_save_is_atomic(tmp_xdg, monkeypatch):
 
     s.current_agent.host = "should-not-appear"
     with pytest.raises(RuntimeError):
-        s.save()
+        config.save_settings(s)
 
     # settings.json on disk is still the pre-crash content.
     after = (tmp_xdg / "config" / "pymibbrowser" /
@@ -104,6 +105,6 @@ def test_save_is_atomic(tmp_xdg, monkeypatch):
 
 def test_load_missing_file_is_default(tmp_xdg):
     # A fresh install (no settings.json yet) must not crash.
-    s = AppSettings.load()
+    s = config.load_settings()
     assert s.current_agent.host == "127.0.0.1"
     assert s.polls == []

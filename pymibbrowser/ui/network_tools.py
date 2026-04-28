@@ -583,7 +583,7 @@ class DiscoveryDialog(QDialog):
             existing.add(key)
             added += 1
         if added:
-            self._settings.save()
+            config.save_settings(self._settings)
         QMessageBox.information(
             self, _t("Network Discovery"),
             _t("Added {added} agent(s), skipped {skipped} duplicate(s).")

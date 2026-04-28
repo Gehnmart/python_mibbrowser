@@ -159,39 +159,46 @@ def test_default_settings_store_uses_xdg(tmp_path, monkeypatch):
     assert expected.exists()
 
 
-# --- back-compat shims ---------------------------------------------------
+# --- module-level convenience wrappers ----------------------------------
 
-class TestBackCompatShims:
-    """AppSettings.load() / settings.save() are kept on the dataclass so
-    existing UI callsites keep working. They delegate to
-    default_settings_store(). New code should use a SettingsStore directly."""
+class TestConfigConvenienceFunctions:
+    """``infra.config.load_settings()`` / ``save_settings(s)`` are the
+    single entry point app code uses; they delegate to
+    default_settings_store(). Tested here as the public surface."""
 
-    def test_appsettings_load_classmethod(self, tmp_path, monkeypatch):
+    def test_load_settings_round_trips(self, tmp_path, monkeypatch):
         monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))
-        # No file yet → defaults.
-        s = AppSettings.load()
-        assert s.current_agent.host == "127.0.0.1"
-
-    def test_settings_save_instance_method(self, tmp_path, monkeypatch):
-        monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))
+        from pymibbrowser.infra import config
         s = AppSettings()
         s.language = "ru"
-        s.save()
-        # Reload via the same shim to confirm round-trip.
-        loaded = AppSettings.load()
+        config.save_settings(s)
+        loaded = config.load_settings()
         assert loaded.language == "ru"
 
-    def test_appsettings_dataclass_has_no_persistence_internals(self):
-        """The dataclass itself stays pure — no _NESTED_LOADERS, no
-        config_dir reference. Only the back-compat methods are attached."""
-        # Fields are pure data.
-        import dataclasses
-        names = {f.name for f in dataclasses.fields(AppSettings)}
-        assert "_NESTED_LOADERS" not in names
-        # No json / Path imports leaked into the model module.
-        from pymibbrowser.engine import model
-        assert "json" not in dir(model)
-        assert "Path" not in dir(model)
+    def test_load_returns_defaults_when_no_file(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "fresh"))
+        from pymibbrowser.infra import config
+        s = config.load_settings()
+        assert s.current_agent.host == "127.0.0.1"
+
+
+# --- model purity --------------------------------------------------------
+
+def test_appsettings_model_has_no_persistence_internals():
+    """The dataclass stays pure: no class-level shims, no JSON import."""
+    # No load/save methods attached — those used to exist as back-compat
+    # shims; once the UI migrated to config.save_settings, the class
+    # became plain data again.
+    assert not hasattr(AppSettings, "load")
+    assert not hasattr(AppSettings, "save") or callable(getattr(AppSettings, "save"))
+    # Ensure the dataclass has no surprising class attributes left over.
+    import dataclasses
+    names = {f.name for f in dataclasses.fields(AppSettings)}
+    assert "_NESTED_LOADERS" not in names
+    # engine.model has no library imports.
+    from pymibbrowser.engine import model
+    assert "json" not in dir(model)
+    assert "Path" not in dir(model)
 
 
 # --- ports.SettingsStore Protocol shape ----------------------------------

@@ -106,7 +106,7 @@ def test_load_corrupt_json_returns_default(tmp_xdg):
     silently falls back to defaults so the user can still launch."""
     cfg = config.config_dir() / "settings.json"
     cfg.write_text("{ this is not json")
-    s = AppSettings.load()
+    s = config.load_settings()
     assert s.current_agent.host == "127.0.0.1"
     assert s.saved_agents == []
 
@@ -117,7 +117,7 @@ def test_load_partial_json_keeps_defaults_for_missing_fields(tmp_xdg):
     `if f.name not in data: continue` branch)."""
     cfg = config.config_dir() / "settings.json"
     cfg.write_text(json.dumps({"language": "en", "trap_port": 1162}))
-    s = AppSettings.load()
+    s = config.load_settings()
     assert s.language == "en"
     assert s.trap_port == 1162
     # Untouched fields keep their defaults.
@@ -136,7 +136,7 @@ def test_load_malformed_nested_field_falls_back(tmp_xdg):
         "saved_agents": "not-a-list",
         "language": "ru",
     }))
-    s = AppSettings.load()
+    s = config.load_settings()
     assert s.language == "ru"          # plain field still applied
     assert s.saved_agents == []         # default kept after loader error
 
@@ -155,7 +155,7 @@ def test_load_skips_non_dict_entries_in_lists(tmp_xdg):
         ],
         "watches": [{"name": "w"}, "drop"],
     }))
-    s = AppSettings.load()
+    s = config.load_settings()
     assert [a.host for a in s.saved_agents] == ["ok"]
     assert len(s.polls) == 1
     assert [v.name for v in s.polls[0].variables] == ["v"]

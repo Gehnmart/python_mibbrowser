@@ -527,5 +527,5 @@ class MibModulesDialog(QDialog):
         # are auto-enabled.
         total = self.tbl.rowCount()
         self.settings.enabled_mibs = None if len(enabled) == total else enabled
-        self.settings.save()
+        config.save_settings(self.settings)
         self.accept()

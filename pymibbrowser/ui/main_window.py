@@ -35,7 +35,7 @@ from PyQt6.QtWidgets import (
 )
 
 from .. import workers
-from ..infra import snmp_ops
+from ..infra import config, snmp_ops
 from ..infra.config import Agent, AppSettings
 from ..infra.i18n import _t, set_language
 from ..infra.mib_loader import MibNode, MibTree
@@ -75,7 +75,8 @@ class MibBrowserWindow(QMainWindow):
         self._settings_save_timer = QTimer(self)
         self._settings_save_timer.setSingleShot(True)
         self._settings_save_timer.setInterval(500)
-        self._settings_save_timer.timeout.connect(self.settings.save)
+        self._settings_save_timer.timeout.connect(
+            lambda: config.save_settings(self.settings))
 
         # Expose components discovered by Tools windows (they reuse SNMP/MIB).
         self.log_pane: QPlainTextEdit | None = self.log_widget
@@ -251,7 +252,7 @@ class MibBrowserWindow(QMainWindow):
         extra vertical space for data. Remembered across sessions."""
         self.log_widget.setVisible(visible)
         self.settings.show_log_pane = visible
-        self.settings.save()
+        config.save_settings(self.settings)
 
     # ------------------------------------------------------------------
     # Toolbar: address, OID, operation, Go
@@ -590,7 +591,7 @@ class MibBrowserWindow(QMainWindow):
                 self.addr_edit.setCurrentText(f"{ag.host}:{ag.port}")
                 self.version_combo.setCurrentText(ag.version)
                 self.comm_edit.setText(ag.read_community)
-                self.settings.save()
+                config.save_settings(self.settings)
                 self._refresh_agent_status()
 
     def _remember_agent(self, ag: Agent) -> None:
@@ -613,7 +614,7 @@ class MibBrowserWindow(QMainWindow):
             self.addr_edit.setCurrentText(f"{ag.host}:{ag.port}")
             self.version_combo.setCurrentText(ag.version)
             self.comm_edit.setText(ag.read_community)
-            self.settings.save()
+            config.save_settings(self.settings)
             self._refresh_agent_status()
             self.status.showMessage(f"Agent updated: {ag.host}:{ag.port} v{ag.version}")
 
@@ -771,7 +772,7 @@ class MibBrowserWindow(QMainWindow):
         self.addr_edit.setCurrentText(f"{ag.host}:{ag.port}")
         self.version_combo.setCurrentText(ag.version)
         self.comm_edit.setText(ag.read_community)
-        self.settings.save()
+        config.save_settings(self.settings)
         self._refresh_agent_status()
         self.status.showMessage(
             _t("Switched to agent #{n}: {host}:{port}").format(
@@ -810,7 +811,7 @@ class MibBrowserWindow(QMainWindow):
 
     def _clear_oid_history(self) -> None:
         self.settings.recent_oids = []
-        self.settings.save()
+        config.save_settings(self.settings)
 
     def _on_search_desc_toggled(self, checked: bool) -> None:
         self.mib_proxy.setSearchDescriptions(checked)
@@ -1491,7 +1492,7 @@ class MibBrowserWindow(QMainWindow):
         if result is None:
             return
         self.settings.bookmarks.append(result)
-        self.settings.save()
+        config.save_settings(self.settings)
         self._rebuild_bookmarks_menu()
 
     def _run_bookmark(self, bm: dict) -> None:
@@ -1541,7 +1542,7 @@ class MibBrowserWindow(QMainWindow):
         if not d.exec():
             return
         self.settings.polls.append(d.result_poll)
-        self.settings.save()
+        config.save_settings(self.settings)
         self._rebuild_polls_menu()
         self._open_poll_tab(d.result_poll)
 
@@ -1584,7 +1585,7 @@ class MibBrowserWindow(QMainWindow):
                              tree=self.tree, parent=d)
             if dlg.exec():
                 self.settings.polls[r] = dlg.result_poll
-                self.settings.save()
+                config.save_settings(self.settings)
                 _refill(select=r)
 
         def _run():
@@ -1600,7 +1601,7 @@ class MibBrowserWindow(QMainWindow):
             if r < 0:
                 return
             del self.settings.polls[r]
-            self.settings.save()
+            config.save_settings(self.settings)
             _refill(select=max(0, r - 1))
 
         lst.itemDoubleClicked.connect(lambda _i: _edit())
@@ -1669,7 +1670,7 @@ class MibBrowserWindow(QMainWindow):
         if not d.exec():
             return
         self.settings.watches.append(d.result_watch)
-        self.settings.save()
+        config.save_settings(self.settings)
         # Open/focus the tab so the user sees what they added.
         self._open_watches()
 
@@ -1731,7 +1732,7 @@ class MibBrowserWindow(QMainWindow):
             if updated is None:
                 return
             self.settings.bookmarks[r] = updated
-            self.settings.save()
+            config.save_settings(self.settings)
             _refill(select=r)
 
         def _delete_current():
@@ -1739,7 +1740,7 @@ class MibBrowserWindow(QMainWindow):
             if r < 0:
                 return
             del self.settings.bookmarks[r]
-            self.settings.save()
+            config.save_settings(self.settings)
             _refill(select=max(0, r - 1))
 
         def _go_current():
@@ -1952,7 +1953,7 @@ class MibBrowserWindow(QMainWindow):
         use_network = net_chk.isChecked()
         if use_network != self.settings.fetch_missing_from_net:
             self.settings.fetch_missing_from_net = use_network
-            self.settings.save()
+            config.save_settings(self.settings)
 
         class _RebuildWorker(QObject):
             progress = pyqtSignal(str, str, int, int)   # mod,status,done,total
@@ -2038,7 +2039,7 @@ class MibBrowserWindow(QMainWindow):
     def _switch_lang(self, lang: str) -> None:
         set_language(lang)
         self.settings.language = lang
-        self.settings.save()
+        config.save_settings(self.settings)
         QMessageBox.information(
             self, _t("About"),
             f"Language saved ({lang}). Restart the app to apply fully.\n"
@@ -2082,7 +2083,7 @@ class MibBrowserWindow(QMainWindow):
         try:
             # Flush any debounced save that hasn't fired yet.
             self._settings_save_timer.stop()
-            self.settings.save()
+            config.save_settings(self.settings)
         finally:
             # Give each dynamic tab a chance to stop its timer.
             for i in range(self.tabs.count()):

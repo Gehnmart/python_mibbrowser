@@ -111,7 +111,7 @@ class MibLoadDialog(QDialog):
         # the app doesn't silently go to the internet on every Load MIB).
         from ..infra import config as _cfg
         try:
-            s = _cfg.AppSettings.load()
+            s = _cfg.load_settings()
             self.net_chk.setChecked(s.fetch_missing_from_net)
         except Exception:
             self.net_chk.setChecked(False)

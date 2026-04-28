@@ -11,8 +11,6 @@ from .logger import CallbackLogger, PrintLogger
 from .mib_compiler import PysmiMibCompiler
 from .mib_store import MibTreeStore
 from .resolver import MibTreeResolver, NumericResolver
-# Importing this module installs the AppSettings.load/save back-compat
-# shims — keep it before any caller tries to use them.
 from .settings import JsonFileSettingsStore, default_settings_store
 from .snmp import PysnmpTransport
 from .traps import PysnmpTrapPublisher, UdpTrapSubscription

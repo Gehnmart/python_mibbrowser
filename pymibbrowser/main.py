@@ -47,7 +47,7 @@ def main() -> int:
     # Resolve settings first so the file handler can write to the user's
     # configured log directory (or the platform default if they haven't
     # overridden it).
-    settings = config.AppSettings.load()
+    settings = config.load_settings()
     _setup_logging(config.log_file(settings.log_dir or None))
     app = QApplication(sys.argv)
     app.setApplicationName("pymibbrowser")
@@ -80,7 +80,7 @@ def main() -> int:
     # modules dialog can show check-state that matches reality.
     if settings.enabled_mibs is None:
         settings.enabled_mibs = mib_loader.MibTree.default_enabled_modules(compiled)
-        settings.save()
+        config.save_settings(settings)
     store = MibTreeStore(compiled, enabled=settings.enabled_mibs)
 
     # Import late so the Qt app exists first.

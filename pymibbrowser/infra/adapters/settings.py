@@ -3,11 +3,6 @@
 Owns the polymorphic-field reconstruction map (was AppSettings._NESTED_LOADERS)
 and the atomic write sequence (tmp + rename). The dataclass itself stays
 pure data in ``engine.model``.
-
-At import time this module also installs back-compat ``load()`` /
-``save()`` shims onto ``AppSettings`` so existing UI callers
-(``settings.save()`` and ``AppSettings.load()``) keep working until the
-UI migrates to SettingsStore explicitly.
 """
 from __future__ import annotations
 
@@ -103,22 +98,3 @@ def default_settings_store() -> JsonFileSettingsStore:
     """The store used when callers don't pass one — settings.json under
     the user's XDG config directory."""
     return JsonFileSettingsStore(config_dir() / "settings.json")
-
-
-# --- Back-compat shims ---------------------------------------------------
-# UI code uses ``AppSettings.load()`` / ``settings.save()`` pervasively.
-# Until step 3 (UI migration) we install these on the class so existing
-# callsites continue to work; they delegate to the default store. New
-# code (CLI, web, scripts) should construct a JsonFileSettingsStore
-# explicitly and call its methods.
-
-def _shim_load(_cls=None) -> AppSettings:
-    return default_settings_store().load()
-
-
-def _shim_save(self: AppSettings) -> None:
-    default_settings_store().save(self)
-
-
-AppSettings.load = classmethod(_shim_load)         # type: ignore[attr-defined]
-AppSettings.save = _shim_save                       # type: ignore[attr-defined]

@@ -101,12 +101,9 @@ class PollDefinition:
 class AppSettings:
     """All persistent application state. Pure data — persistence (load/
     save, JSON serialisation, file paths) lives in a SettingsStore
-    adapter; nothing on this class touches the filesystem.
-
-    Backward-compat ``load()`` / ``save()`` methods are attached at
-    import time by ``pymibbrowser.infra.adapters.settings`` so existing
-    UI callers (``settings.save()``) keep working until the UI migrates
-    to SettingsStore explicitly."""
+    adapter; nothing on this class touches the filesystem. Callers
+    persist via ``infra.config.save_settings(s)`` /
+    ``infra.config.load_settings()`` (or a SettingsStore directly)."""
 
     current_agent: Agent = field(default_factory=Agent)
     # Template used as the starting point for new agents (Add in Manage

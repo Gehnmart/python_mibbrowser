@@ -103,7 +103,7 @@ class AgentsDialog(QDialog):
 
     def _mark_changed(self) -> None:
         self.changed = True
-        self.settings.save()
+        config.save_settings(self.settings)
 
     # --- actions ------------------------------------------------------
 

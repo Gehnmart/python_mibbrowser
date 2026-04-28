@@ -301,7 +301,7 @@ class WatchesTab(QWidget):
 
     def _on_interval_changed(self, v: int) -> None:
         self.settings.watch_interval_s = int(v)
-        self.settings.save()
+        config.save_settings(self.settings)
         if not self._paused:
             self._timer.start(max(1, v) * 1000)
 
@@ -309,7 +309,7 @@ class WatchesTab(QWidget):
         d = AddWatchDialog(WatchDefinition(), tree=self.tree, parent=self)
         if d.exec():
             self.settings.watches.append(d.result_watch)
-            self.settings.save()
+            config.save_settings(self.settings)
             self._refill(select=len(self.settings.watches) - 1)
             self._refresh()
 
@@ -321,7 +321,7 @@ class WatchesTab(QWidget):
                            tree=self.tree, parent=self)
         if d.exec():
             self.settings.watches[r] = d.result_watch
-            self.settings.save()
+            config.save_settings(self.settings)
             self._refill(select=r)
             self._refresh()
 
@@ -330,7 +330,7 @@ class WatchesTab(QWidget):
         if r < 0:
             return
         del self.settings.watches[r]
-        self.settings.save()
+        config.save_settings(self.settings)
         self._refill(select=max(0, r - 1))
 
     # --- refresh ------------------------------------------------------

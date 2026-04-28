@@ -306,7 +306,7 @@ class PreferencesDialog(QDialog):
         s.logging_level = self.log_level.currentText()
         new_log_dir = self.log_dir_edit.text().strip()
         s.log_dir = "" if new_log_dir == str(config.log_dir()) else new_log_dir
-        s.save()
+        config.save_settings(s)
         self.accept()
 
     def _open_modules(self) -> None:

@@ -71,6 +71,21 @@ def default_mibs_src() -> Path:
     return project_root() / "mibs-src"
 
 
+def load_settings() -> AppSettings:
+    """Read AppSettings via the default JsonFileSettingsStore.
+    Convenience wrapper for callers that don't need to inject a custom
+    SettingsStore — equivalent to ``default_settings_store().load()``."""
+    from .adapters.settings import default_settings_store
+    return default_settings_store().load()
+
+
+def save_settings(settings: AppSettings) -> None:
+    """Persist via the default JsonFileSettingsStore. Equivalent to
+    ``default_settings_store().save(settings)``."""
+    from .adapters.settings import default_settings_store
+    default_settings_store().save(settings)
+
+
 __all__ = [
     "APP_NAME",
     "Agent",
@@ -85,4 +100,6 @@ __all__ = [
     "log_file",
     "project_root",
     "default_mibs_src",
+    "load_settings",
+    "save_settings",
 ]
