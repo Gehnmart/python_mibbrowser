@@ -51,6 +51,27 @@ def test_discover_walks_extension_variants(cache, tmp_path):
     assert set(out) == {"FOO", "BAR", "BAZ"}
 
 
+def test_discover_skips_stub_mibs(cache, tmp_path):
+    """Framework MIBs that pysnmp provides at runtime (ASN1, SNMPv2-SMI,
+    ...) are filtered — compiling them would be redundant."""
+    src = tmp_path / "src"; src.mkdir()
+    (src / "ASN1.mib").write_text("")
+    (src / "USEFUL.mib").write_text("")
+    out = PysmiMibCompiler(cache).discover([src])
+    assert "ASN1" not in out
+    assert "USEFUL" in out
+
+
+def test_discover_dedups_across_source_dirs(cache, tmp_path):
+    """Same module shipped under multiple source roots collapses to one."""
+    d1 = tmp_path / "d1"; d1.mkdir()
+    d2 = tmp_path / "d2"; d2.mkdir()
+    (d1 / "FOO.mib").write_text("")
+    (d2 / "FOO.mib").write_text("")
+    out = PysmiMibCompiler(cache).discover([d1, d2])
+    assert out == ["FOO"]
+
+
 # --- compile --------------------------------------------------------------
 
 class TestCompile:

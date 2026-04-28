@@ -1,10 +1,14 @@
 """
-MIB loading, compilation, and tree building.
+MIB loading and tree building.
 
-Two responsibilities:
-  1. Compile ASN.1 MIB sources (iReasoning format) into pysnmp's JSON format
-     via pysmi — so that pysnmp can translate OID names ↔ numeric OIDs.
-  2. Build an in-memory tree of OID nodes for the GUI tree view.
+Pure Python — no pysmi here. The compile path lives in
+``infra.adapters.mib_compiler.PysmiMibCompiler``; this module only
+hands the in-memory tree built from already-compiled JSON files.
+
+The ``STUB_MIBS`` constant stays here because both the compiler
+adapter and the UI's MIB-modules dialog need it — it identifies the
+framework MIBs pysnmp provides at runtime, regardless of who's
+asking.
 """
 from __future__ import annotations
 
@@ -14,79 +18,19 @@ from collections.abc import Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from pysmi.codegen import JsonCodeGen
-from pysmi.compiler import MibCompiler
-from pysmi.parser import SmiV1CompatParser
-from pysmi.reader import FileReader, HttpReader
-from pysmi.searcher import AnyFileSearcher, StubSearcher
-from pysmi.writer import FileWriter
-
-from . import config
-
 log = logging.getLogger(__name__)
 
 
 # Stub modules that are implicitly provided by pysnmp at runtime — we shouldn't
 # try to compile them. Matches pysmi's baseMibs list.
-# pysmi's framework mibs — these are built-in metadata modules, not useful to
-# compile (no OIDs of their own). SNMPv2-MIB is NOT included here because it
-# defines widely-used nodes (sysName, sysContact, ...) that we want in the tree.
+# These are framework metadata modules (no OIDs of their own).
+# SNMPv2-MIB is NOT included here because it defines widely-used nodes
+# (sysName, sysContact, ...) that we want in the tree.
 STUB_MIBS = (
     "RFC-1212", "RFC-1215", "RFC1155-SMI", "RFC1158-MIB",
     "SNMPv2-SMI", "SNMPv2-TC", "SNMPv2-CONF",
     "ASN1", "ASN1-ENUMERATION", "ASN1-REFINEMENT",
 )
-
-
-# ---------------------------------------------------------------------------
-# Compilation
-# ---------------------------------------------------------------------------
-
-def _make_compiler(src_dirs: list[Path], dest: Path,
-                   use_network: bool = False) -> MibCompiler:
-    searchers = [
-        StubSearcher(*STUB_MIBS),
-        AnyFileSearcher(str(dest)).set_options(exts=[".json"]),
-    ]
-    readers: list = [FileReader(str(d), recursive=True) for d in src_dirs]
-    if use_network:
-        try:
-            readers.append(HttpReader("https://mibs.pysnmp.com/asn1/@mib@"))
-        except TypeError:
-            readers.append(HttpReader("mibs.pysnmp.com", 443, "/asn1/@mib@"))
-
-    c = MibCompiler(SmiV1CompatParser(tempdir=""),
-                    JsonCodeGen(),
-                    FileWriter(str(dest)).set_options(suffix=".json"))
-    c.add_sources(*readers)
-    c.add_searchers(*searchers)
-    return c
-
-
-def _discover_modules(src_dirs: list[Path]) -> list[str]:
-    mods: list[str] = []
-    seen: set[str] = set()
-    for d in src_dirs:
-        if not d.exists():
-            continue
-        for p in sorted(d.rglob("*")):
-            if not p.is_file():
-                continue
-            name = p.name
-            mod = (p.stem if name.lower().endswith((".mib", ".my", ".txt", ".smi"))
-                   else name)
-            mod = mod.upper()
-            if mod in seen or mod in STUB_MIBS:
-                continue
-            seen.add(mod)
-            mods.append(mod)
-    return mods
-
-
-# Compilation has moved to ``infra.adapters.mib_compiler.PysmiMibCompiler``.
-# The legacy ``compile_mibs`` / ``compile_modules`` / ``build_tree_with_default_mibs``
-# wrappers used to live here; deleted in the UI migration since the only
-# remaining callsites had become test-only.
 
 
 # ---------------------------------------------------------------------------

@@ -1,10 +1,8 @@
-"""mib_loader tests covering the in-memory tree builder and JSON merger.
+"""mib_loader tests — pure tree builder + JSON merger.
 
-The pysmi-driven compile path (compile_mibs, _make_compiler) is exercised
-end-to-end via the tiny mibs-src/ fixtures already present in the repo —
-one slow integration test, gated behind a fixture, plus a fast unit test
-for _discover_modules. Everything else uses synthetic pysmi-style JSON
-written to a tmp_path."""
+The pysmi compile path now lives in
+``infra.adapters.mib_compiler.PysmiMibCompiler`` and its tests; this
+file only covers the tree code that stays in mib_loader."""
 from __future__ import annotations
 
 import json
@@ -13,11 +11,7 @@ from pathlib import Path
 import pytest
 
 from pymibbrowser.infra import mib_loader
-from pymibbrowser.infra.mib_loader import (
-    MibNode,
-    MibTree,
-    _discover_modules,
-)
+from pymibbrowser.infra.mib_loader import MibNode, MibTree
 
 
 # --- MibNode --------------------------------------------------------------
@@ -427,33 +421,5 @@ class TestLoadCompiled:
         assert t.node_by_name("bogus") is None
 
 
-# --- _discover_modules ---------------------------------------------------
-
-class TestDiscoverModules:
-    def test_walks_extensions(self, tmp_path):
-        (tmp_path / "FOO.mib").write_text("")
-        (tmp_path / "bar.txt").write_text("")
-        (tmp_path / "BAZ.my").write_text("")
-        (tmp_path / "QUUX").write_text("")     # bare name, no extension
-        out = _discover_modules([tmp_path])
-        # Names are uppercased and de-duplicated.
-        assert set(out) == {"FOO", "BAR", "BAZ", "QUUX"}
-
-    def test_skips_stub_mibs(self, tmp_path):
-        (tmp_path / "ASN1.mib").write_text("")
-        (tmp_path / "OK.mib").write_text("")
-        out = _discover_modules([tmp_path])
-        assert "ASN1" not in out
-        assert "OK" in out
-
-    def test_missing_dir_skipped(self, tmp_path):
-        out = _discover_modules([tmp_path / "does-not-exist", tmp_path])
-        assert out == []
-
-    def test_dedup_across_dirs(self, tmp_path):
-        d1 = tmp_path / "d1"; d1.mkdir()
-        d2 = tmp_path / "d2"; d2.mkdir()
-        (d1 / "FOO.mib").write_text("")
-        (d2 / "FOO.mib").write_text("")
-        out = _discover_modules([d1, d2])
-        assert out == ["FOO"]
+# Discover-modules tests live in tests/infra/test_mib_compiler.py since
+# the helper they exercise now lives in the compiler adapter.
