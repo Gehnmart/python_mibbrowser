@@ -145,6 +145,21 @@ class AppSettings:
 
 
 @dataclass(frozen=True)
+class CompileResult:
+    """Outcome of compiling a single MIB module. ``status`` is the raw
+    pysmi status string ("compiled", "untouched", or "failed: <reason>")
+    — adapters may surface other strings; consumers should treat
+    anything not starting with "failed" as success."""
+
+    module: str
+    status: str
+
+    @property
+    def ok(self) -> bool:
+        return not self.status.startswith("failed")
+
+
+@dataclass(frozen=True)
 class MibNodeView:
     """Read-only view of a MIB node — what callers need to render or
     inspect a node without importing infra types. Adapters materialise

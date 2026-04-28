@@ -9,6 +9,7 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QApplication, QMessageBox, QProgressDialog
 
 from .infra import config, i18n, mib_loader
+from .infra.adapters import PysmiMibCompiler
 
 
 def _setup_logging(log_path: Path) -> None:
@@ -64,7 +65,9 @@ def main() -> int:
         dlg.show()
         app.processEvents()
         try:
-            mib_loader.compile_mibs([config.default_mibs_src()], compiled)
+            compiler = PysmiMibCompiler(compiled)
+            sources = [config.default_mibs_src()]
+            compiler.compile(compiler.discover(sources), sources)
         except Exception as exc:
             dlg.close()
             QMessageBox.critical(None, "MIB compile failed", str(exc))

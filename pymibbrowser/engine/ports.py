@@ -11,7 +11,16 @@ from typing import Protocol
 
 from collections.abc import Callable
 
-from .model import Agent, AppSettings, MibNodeView, TrapEvent, VarBind
+from pathlib import Path
+
+from .model import (
+    Agent,
+    AppSettings,
+    CompileResult,
+    MibNodeView,
+    TrapEvent,
+    VarBind,
+)
 
 
 class SnmpTransport(Protocol):
@@ -87,6 +96,29 @@ class TrapSubscription(Protocol):
     def stop(self) -> None: ...
 
     def is_running(self) -> bool: ...
+
+
+class MibCompiler(Protocol):
+    """Compile MIB sources into a cache. The cache location is the
+    adapter's responsibility (set at construction); per-call options
+    (rebuild, network fallback, progress, cancellation) are kwargs.
+
+    ``on_progress(result, done, total)`` fires after each module
+    finishes. ``should_cancel()`` is checked between modules — already-
+    started compilations run to completion (pysmi has no cooperative
+    cancel inside a single compile) but the next won't start once the
+    flag flips."""
+
+    def discover(self, source_dirs: list[Path]) -> list[str]:
+        """Module names found in the given source directories. Sorted,
+        deduped, stub MIBs excluded."""
+
+    def compile(self, modules: list[str], source_dirs: list[Path], *,
+                rebuild: bool = False,
+                use_network: bool = False,
+                on_progress: Callable[[CompileResult, int, int], None] | None = None,
+                should_cancel: Callable[[], bool] | None = None,
+                ) -> list[CompileResult]: ...
 
 
 class SettingsStore(Protocol):
