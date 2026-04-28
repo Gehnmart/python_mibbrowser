@@ -35,3 +35,7 @@ logs/
 /tmp-*/
 screenshot*.png
 .coverage
+
+# Mutation testing scratch — mutmut copies the source tree here per run.
+mutants/
+mutmut-stats.json

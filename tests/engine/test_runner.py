@@ -112,6 +112,19 @@ class TestGet:
         assert any("unresolved OID: totally-unknown" in ln
                    for ln in logger.lines)
 
+    def test_multiple_unresolved_all_logged(self):
+        """Resolution loop must continue past the first failure — every
+        unresolvable OID gets its own diagnostic line."""
+        snmp = RecordingSnmp()
+        logger = ListLogger()
+        ctx = _ctx(snmp=snmp, logger=logger)
+        _run("get 127.0.0.1 nope-1 nope-2 nope-3\n", ctx)
+        unresolved = [ln for ln in logger.lines if "unresolved OID:" in ln]
+        assert len(unresolved) == 3
+        assert any("nope-1" in ln for ln in unresolved)
+        assert any("nope-2" in ln for ln in unresolved)
+        assert any("nope-3" in ln for ln in unresolved)
+
     def test_transport_exception_sets_last_error(self):
         def boom(_a, _o):
             raise RuntimeError("agent unreachable")
@@ -142,10 +155,40 @@ class TestSet:
     def test_passes_triples_to_transport(self):
         snmp = RecordingSnmp()
         ctx = _ctx(snmp=snmp)
-        _run("set 127.0.0.1 sysContact.0 s admin@example.com\n", ctx)
+        _run("set 127.0.0.1:11161 sysContact.0 s admin@example.com\n", ctx)
         assert len(snmp.set_calls) == 1
         c = snmp.set_calls[0]
+        # Agent passed to transport carries the per-command host/port —
+        # not None or the base agent's value.
+        assert c.host == "127.0.0.1"
+        assert c.port == 11161
         assert c.arg == [((1, 3, 6, 1, 2, 1, 1, 4, 0), "s", "admin@example.com")]
+
+    def test_success_clears_err_predicate(self):
+        """A successful set must reset last_error to 0 — otherwise a
+        following `if $ err` would fire spuriously."""
+        snmp = RecordingSnmp(set_fn=lambda _a, _p: [])
+        clock = FakeClock()
+        ctx = _ctx(snmp=snmp, clock=clock)
+        _run("set 127.0.0.1 sysContact.0 s hi\n"
+             "if $ err sleep 1\n", ctx)
+        assert clock.sleeps == []
+
+    def test_emits_returned_varbinds(self):
+        """If the agent echoes the SET response, those varbinds flow
+        through logger and (when a save is open) into the sink."""
+        echoed = VarBind(oid=(1, 3, 6, 1, 2, 1, 1, 4, 0),
+                          type_name="OctetString", display_value="hi")
+        snmp = RecordingSnmp(set_fn=lambda _a, _p: [echoed])
+        logger = ListLogger()
+        sink = ListSink()
+        ctx = _ctx(snmp=snmp, logger=logger, sink=sink)
+        _run("save out.txt\n"
+             "set 127.0.0.1 sysContact.0 s hi\n", ctx)
+        assert any("OctetString" in ln and "hi" in ln for ln in logger.lines)
+        assert sink.closed_with
+        _, lines = sink.closed_with[0]
+        assert any("OctetString" in ln for ln in lines)
 
     def test_skips_unresolved_keeps_resolved(self):
         snmp = RecordingSnmp()
@@ -373,6 +416,71 @@ class TestUnknown:
         ctx = _ctx(logger=logger)
         _run("sleep notanumber\n", ctx)
         assert any("bad sleep" in ln for ln in logger.lines)
+
+
+# --- _compare unit tests --------------------------------------------------
+
+class TestCompare:
+    """`_compare` is the heart of the comparison branch of `if $`. It's
+    reachable end-to-end only when `last_error != 0` AND `last_result`
+    happens to be None — a narrow path. Test directly so the edge cases
+    don't slip past."""
+
+    def test_one_side_none_returns_false(self):
+        from pymibbrowser.engine.runner import _compare
+        # Either side missing → no fire.
+        assert _compare(None, "5", ">") is False
+        assert _compare("5", "", ">") is False
+
+    def test_both_sides_none_returns_false(self):
+        from pymibbrowser.engine.runner import _compare
+        assert _compare(None, "", ">") is False
+
+    def test_unknown_operator_returns_false(self):
+        from pymibbrowser.engine.runner import _compare
+        # Bogus op (parser would never emit one, but the runner is
+        # defensive). Must not silently fire the action.
+        assert _compare("5", "3", "??") is False
+
+    def test_known_operators(self):
+        from pymibbrowser.engine.runner import _compare
+        assert _compare("10", "5", ">") is True
+        assert _compare("5", "10", "<") is True
+        assert _compare("5", "5", "=") is True
+        assert _compare("5", "5", "!=") is False
+        assert _compare("5", "5", ">=") is True
+        assert _compare("5", "5", "<=") is True
+
+
+# --- cancel + sink --------------------------------------------------------
+
+def test_cancel_mid_script_still_closes_sink():
+    """When the cancel flag flips between commands, execute() must still
+    flush an open sink target — otherwise captured output is lost. Verifies
+    the cancel branch falls through to ctx.sink.close() rather than
+    early-returning."""
+    snmp = RecordingSnmp(get_fn=lambda _a, _o: [
+        VarBind(oid=(1, 3, 6, 1, 2, 1, 1, 3, 0),
+                type_name="TimeTicks", display_value="42"),
+    ])
+    sink = ListSink()
+    calls = {"n": 0}
+
+    def cancel_after_two_commands():
+        # save → False, get → False, then True (skipping the second get).
+        calls["n"] += 1
+        return calls["n"] > 2
+
+    ctx = _ctx(snmp=snmp, sink=sink, cancel=cancel_after_two_commands)
+    _run("save out.txt\n"
+         "get 127.0.0.1 sysUpTime.0\n"
+         "get 127.0.0.1 sysContact.0\n", ctx)
+    # First get persisted; the second was skipped by cancel; sink.close()
+    # still ran and committed the buffered line to closed_with.
+    assert sink.closed_with, "sink.close() must run even after cancel"
+    target, lines = sink.closed_with[0]
+    assert target == "out.txt"
+    assert any("TimeTicks" in ln for ln in lines)
 
 
 # --- determinism ----------------------------------------------------------

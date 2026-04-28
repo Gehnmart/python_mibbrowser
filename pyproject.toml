@@ -184,6 +184,15 @@ check_untyped_defs = true
 disable_error_code = []   # don't inherit the Qt-related disables
 
 
+[tool.mutmut]
+# Mutation testing — pointed at the pure engine only. Adapters /
+# UI carry too much I/O for mutmut's per-mutant test runs to be
+# fast enough; engine tests are 0.04s end-to-end so a full sweep
+# is tractable.
+paths_to_mutate = ["pymibbrowser/engine/"]
+tests_dir = ["tests/engine/"]
+
+
 [tool.bandit]
 # Bandit finds security smells. Limit to our own package — not tests,
 # not build artefacts.

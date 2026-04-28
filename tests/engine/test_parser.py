@@ -62,7 +62,38 @@ def test_getnext():
 
 def test_get_too_few_args_unknown():
     cmd = parse_command("get 127.0.0.1")
-    assert isinstance(cmd, Unknown)
+    assert cmd == Unknown(text="get 127.0.0.1", reason="unknown command")
+
+
+def test_parse_host_ipv6_uses_rsplit():
+    """Host:port must split on the LAST colon — IPv6 literals contain
+    several. `rsplit(':', 1)` keeps the address intact; `split(':', 1)`
+    would chop it after the first segment."""
+    from pymibbrowser.engine.parser import _parse_host
+    host, port = _parse_host("2001:db8::1:11161", default_port=161)
+    assert host == "2001:db8::1"
+    assert port == 11161
+
+
+def test_parse_command_default_port_is_161():
+    """Omitted-default verifies the literal — kills mutants that flip
+    the default to 162 (or any other port)."""
+    cmd = parse_command("get host sysUpTime.0")
+    assert isinstance(cmd, Get) and cmd.port == 161
+
+
+def test_parse_script_propagates_default_port():
+    """parse_script must thread its default_port through to parse_command;
+    the GUI relies on this to align CLI/GUI agent defaults."""
+    s = parse_script("get host sysUpTime.0\n", default_port=12345)
+    assert isinstance(s.commands[0], Get)
+    assert s.commands[0].port == 12345
+
+
+def test_parse_script_default_port_is_161():
+    s = parse_script("get host sysUpTime.0\n")
+    assert isinstance(s.commands[0], Get)
+    assert s.commands[0].port == 161
 
 
 # --- set ------------------------------------------------------------------
@@ -81,7 +112,20 @@ def test_set_multiple_triples():
 
 def test_set_unbalanced_triples_unknown():
     cmd = parse_command("set 1.2.3.4 oid1 i")    # missing value
-    assert isinstance(cmd, Unknown)
+    assert cmd == Unknown(text="set 1.2.3.4 oid1 i", reason="unknown command")
+
+
+def test_set_too_few_args_unknown():
+    cmd = parse_command("set 1.2.3.4 oid1")
+    assert cmd == Unknown(text="set 1.2.3.4 oid1", reason="unknown command")
+
+
+def test_set_extra_arg_breaks_triples():
+    """Enough args to pass the < 5 guard but the trailing OIDs aren't a
+    full triple — must still surface as Unknown with the original line."""
+    line = "set 1.2.3.4 oid1 i 10 oid2"   # rest = 4 items, 4 % 3 == 1
+    cmd = parse_command(line)
+    assert cmd == Unknown(text=line, reason="unknown command")
 
 
 # --- sleep ----------------------------------------------------------------
@@ -101,8 +145,8 @@ def test_sleep_missing_arg_unknown():
 
 def test_sleep_bad_arg_unknown():
     cmd = parse_command("sleep notanumber")
-    assert isinstance(cmd, Unknown)
-    assert cmd.reason == "bad sleep"
+    # text is the offending token, not the whole line.
+    assert cmd == Unknown(text="notanumber", reason="bad sleep")
 
 
 # --- save -----------------------------------------------------------------
@@ -116,7 +160,7 @@ def test_save_path_with_spaces():
 
 
 def test_save_no_arg_unknown():
-    assert isinstance(parse_command("save"), Unknown)
+    assert parse_command("save") == Unknown(text="save", reason="unknown command")
 
 
 # --- if -------------------------------------------------------------------
@@ -129,6 +173,13 @@ def test_if_err_with_action():
 def test_if_err_action_no_arg():
     cmd = parse_command("if $ err sound")
     assert cmd == If(predicate="err", operand="", action="sound", arg="")
+
+
+def test_if_compare_action_no_arg():
+    """Comparison form with no trailing arg: arg field must be the empty
+    string, not a placeholder."""
+    cmd = parse_command("if $ > 50 sound")
+    assert cmd == If(predicate=">", operand="50", action="sound", arg="")
 
 
 def test_if_compare_gt():
