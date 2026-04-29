@@ -294,6 +294,9 @@ _RU = {
     "Also search in descriptions": "Искать также в описаниях",
     "Match the filter text against each node's DESCRIPTION as well as its name. Slower on big trees.":
         "Сопоставлять текст фильтра не только с именем узла, но и с его DESCRIPTION. Медленнее на больших деревьях.",
+    "Regular expression":   "Регулярное выражение",
+    "Whole word":           "Слово целиком",
+    "Search in descriptions": "Искать в описаниях",
     "Recent OIDs":          "Недавние OID",
     "(no history yet)":     "(история пуста)",
     "Show raw PDU (hex dump)": "Показать сырой PDU (hex-дамп)",
@@ -343,6 +346,7 @@ _RU = {
     "MIB Tree":                            "Дерево MIB",
     "SNMP MIBs":                           "SNMP MIB",
     "Filter MIB tree (substring)…":        "Фильтр MIB дерева (подстрока)…",
+    "Filter MIB tree…":                    "Фильтр MIB дерева…",
 
     # Result pane
     "Result":               "Результат",
@@ -531,7 +535,13 @@ _RU = {
     "Add to Watches":       "Добавить в наблюдения",
     "Add to Watches…":      "Добавить в наблюдения…",
     "SNMP Operation":       "SNMP-операция",
-    "Normal state if result": "Нормально, если результат",
+    "Normal state if result": "Норма, если результат",
+    "Tip: enter the value the result must satisfy to count "
+    "as normal — anything else is an alarm.":
+        "Подсказка: укажите значение, которое результат должен "
+        "удовлетворять, чтобы считаться нормой. Иначе — тревога.",
+    "Normal: result {op} {val}    ·    Alarm: result {inv} {val}":
+        "Норма: результат {op} {val}    ·    Тревога: результат {inv} {val}",
     "Condition":            "Условие",
     "Status":               "Статус",
     "Last Query":           "Последний запрос",

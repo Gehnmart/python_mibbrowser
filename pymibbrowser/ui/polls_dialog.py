@@ -20,6 +20,7 @@ from PyQt6.QtWidgets import (
     QDialogButtonBox,
     QFormLayout,
     QHBoxLayout,
+    QHeaderView,
     QInputDialog,
     QLabel,
     QLineEdit,
@@ -166,7 +167,8 @@ class PollDialog(QDialog):
         self.var_tbl.setSelectionMode(
             QAbstractItemView.SelectionMode.SingleSelection)
         self.var_tbl.doubleClicked.connect(lambda _=None: self._modify_variable())
-        self.var_tbl.horizontalHeader().setStretchLastSection(True)
+        self.var_tbl.horizontalHeader().setSectionResizeMode(
+            self.var_tbl.columnCount() - 1, QHeaderView.ResizeMode.Stretch)
         self._refill_vars()
         v.addWidget(self.var_tbl, 2)
 
@@ -183,8 +185,8 @@ class PollDialog(QDialog):
             self.var_tbl.setItem(r, 0, QTableWidgetItem(pv.name))
             self.var_tbl.setItem(r, 1, QTableWidgetItem(pv.oid))
             self.var_tbl.setItem(r, 2, QTableWidgetItem(pv.operation))
-        self.var_tbl.resizeColumnsToContents()
-        self.var_tbl.horizontalHeader().setStretchLastSection(True)
+        for c in range(self.var_tbl.columnCount() - 1):
+            self.var_tbl.resizeColumnToContents(c)
         if 0 <= select < len(self.result_poll.variables):
             self.var_tbl.selectRow(select)
 

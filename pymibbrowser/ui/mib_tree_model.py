@@ -12,6 +12,7 @@ item, and it's what the rest of the app gets back via `node_for_index`.
 """
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 
 from PyQt6.QtCore import QAbstractItemModel, QModelIndex, QSortFilterProxyModel, Qt
@@ -109,6 +110,10 @@ class FastMibFilterProxy(QSortFilterProxyModel):
     virtual node's display string (so a chain collapses as a unit)
     and pre-computes per-node match status to avoid the quadratic
     blow-up QSortFilterProxyModel does by default.
+
+    Supports three independent toggles, mirroring VSCode's search box:
+    regex, whole-word, and "also search descriptions". The first two
+    rebuild the compiled matcher; the third only widens the haystack.
     """
 
     def __init__(self, parent=None) -> None:
@@ -116,6 +121,10 @@ class FastMibFilterProxy(QSortFilterProxyModel):
         self._needle = ""
         self._cache: dict[int, bool] = {}  # id(VirtNode) → matched
         self._search_descriptions = False
+        self._use_regex = False
+        self._whole_word = False
+        self._matcher: re.Pattern[str] | None = None
+        self._regex_invalid = False
         self.setFilterCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
 
     def setSearchDescriptions(self, enabled: bool) -> None:
@@ -125,26 +134,64 @@ class FastMibFilterProxy(QSortFilterProxyModel):
         if enabled == self._search_descriptions:
             return
         self._search_descriptions = enabled
+        self._recompute()
+
+    def setUseRegex(self, enabled: bool) -> None:
+        if enabled == self._use_regex:
+            return
+        self._use_regex = enabled
+        self._recompute()
+
+    def setWholeWord(self, enabled: bool) -> None:
+        if enabled == self._whole_word:
+            return
+        self._whole_word = enabled
+        self._recompute()
+
+    def regexInvalid(self) -> bool:
+        """True when the user typed a regex the engine couldn't compile —
+        UI surfaces this with a red border on the input."""
+        return self._regex_invalid
+
+    def setFilterFixedString(self, s: str) -> None:
+        self._needle = s or ""
+        self._recompute()
+        super().setFilterFixedString(s)
+
+    def _build_matcher(self) -> None:
+        self._matcher = None
+        self._regex_invalid = False
+        if not self._needle:
+            return
+        pattern = self._needle if self._use_regex else re.escape(self._needle)
+        if self._whole_word:
+            pattern = rf"(?:\b|_){pattern}(?:\b|_)"
+        try:
+            self._matcher = re.compile(pattern, re.IGNORECASE)
+        except re.error:
+            self._regex_invalid = True
+            self._matcher = None
+
+    def _recompute(self) -> None:
+        self._build_matcher()
         self._cache.clear()
         src_model = self.sourceModel()
-        if src_model is not None and self._needle:
+        if src_model is not None and self._matcher is not None:
             self._precompute(src_model._root_v)  # type: ignore[attr-defined]
         self.invalidateFilter()
 
-    def setFilterFixedString(self, s: str) -> None:
-        self._needle = (s or "").lower()
-        self._cache.clear()
-        src_model = self.sourceModel()
-        if src_model is not None and self._needle:
-            root_v = src_model._root_v  # type: ignore[attr-defined]
-            self._precompute(root_v)
-        super().setFilterFixedString(s)
+    def _node_matches(self, v: VirtNode) -> bool:
+        m = self._matcher
+        if m is None:
+            return False
+        if m.search(v.display):
+            return True
+        if self._search_descriptions and v.real.description:
+            return bool(m.search(v.real.description))
+        return False
 
     def _precompute(self, v: VirtNode) -> bool:
-        matched = self._needle in v.display.lower()
-        if (not matched and self._search_descriptions
-                and v.real.description):
-            matched = self._needle in v.real.description.lower()
+        matched = self._node_matches(v)
         for c in v.children:
             if self._precompute(c):
                 matched = True
@@ -152,12 +199,12 @@ class FastMibFilterProxy(QSortFilterProxyModel):
         return matched
 
     def _matches_any(self, v: VirtNode) -> bool:
-        if not self._needle:
+        if self._matcher is None:
             return True
-        return self._cache.get(id(v), True)
+        return self._cache.get(id(v), False)
 
     def filterAcceptsRow(self, row: int, parent: QModelIndex) -> bool:
-        if not self._needle:
+        if self._matcher is None:
             return True
         src = self.sourceModel()
         idx = src.index(row, 0, parent)

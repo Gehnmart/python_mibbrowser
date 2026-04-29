@@ -29,6 +29,7 @@ from PyQt6.QtWidgets import (
     QTableWidgetItem,
     QTabWidget,
     QToolBar,
+    QToolButton,
     QTreeView,
     QVBoxLayout,
     QWidget,
@@ -69,7 +70,7 @@ class MibBrowserWindow(QMainWindow):
         self._build_toolbar()
         self._build_menu()
         self._build_status()
-        self._expand_to_mib2()
+        self._expand_to_startup_folder()
         self._install_agent_hotkeys()
         # Debounced settings save — see _save_settings_soon.
         self._settings_save_timer = QTimer(self)
@@ -98,18 +99,27 @@ class MibBrowserWindow(QMainWindow):
 
         filter_row = QHBoxLayout()
         filter_row.setContentsMargins(0, 0, 0, 0)
+        filter_row.setSpacing(2)
         self.mib_search = QLineEdit()
-        self.mib_search.setPlaceholderText(_t("Filter MIB tree (substring)…"))
+        self.mib_search.setPlaceholderText(_t("Filter MIB tree…"))
         self.mib_search.setClearButtonEnabled(True)
         filter_row.addWidget(self.mib_search, 1)
-        exp_btn = QPushButton("⊞"); exp_btn.setToolTip(_t("Expand all"))
-        exp_btn.setFixedWidth(26)
-        exp_btn.clicked.connect(lambda: self.mib_view.expandAll())
-        filter_row.addWidget(exp_btn)
-        col_btn = QPushButton("⊟"); col_btn.setToolTip(_t("Collapse all"))
-        col_btn.setFixedWidth(26)
-        col_btn.clicked.connect(lambda: self.mib_view.collapseAll())
-        filter_row.addWidget(col_btn)
+        # VSCode-style inline toggles: regex / whole-word / search in
+        # descriptions. Kept on the same row so the input stays compact;
+        # QToolButton with autoRaise renders as a flat affordance that
+        # highlights when checked, just like VSCode's search box.
+        self.regex_btn = self._make_filter_toggle(
+            ".*", _t("Regular expression"))
+        self.regex_btn.toggled.connect(self._on_regex_toggled)
+        filter_row.addWidget(self.regex_btn)
+        self.word_btn = self._make_filter_toggle(
+            "ab", _t("Whole word"))
+        self.word_btn.toggled.connect(self._on_word_toggled)
+        filter_row.addWidget(self.word_btn)
+        self.search_desc_btn = self._make_filter_toggle(
+            "¶", _t("Search in descriptions"))
+        self.search_desc_btn.toggled.connect(self._on_search_desc_toggled)
+        filter_row.addWidget(self.search_desc_btn)
         # Debounce: applying the filter on every keystroke across ~5 000 nodes
         # with recursive filtering freezes the UI. Wait until the user has
         # paused typing for 250 ms before reapplying.
@@ -119,16 +129,6 @@ class MibBrowserWindow(QMainWindow):
         self._filter_timer.timeout.connect(self._apply_mib_filter_now)
         self.mib_search.textChanged.connect(lambda _: self._filter_timer.start())
         tv.addLayout(filter_row)
-        # Second row: "also search in descriptions" checkbox — keeps
-        # the primary filter row clean but gives power users a way to
-        # find 'temperature'/'cpu'/etc. by hitting the DESCRIPTION.
-        from PyQt6.QtWidgets import QCheckBox
-        self.search_desc_chk = QCheckBox(_t("Also search in descriptions"))
-        self.search_desc_chk.setToolTip(_t(
-            "Match the filter text against each node's DESCRIPTION as "
-            "well as its name. Slower on big trees."))
-        self.search_desc_chk.toggled.connect(self._on_search_desc_toggled)
-        tv.addWidget(self.search_desc_chk)
 
         self.mib_model = MibTreeModel(
             self.tree, single_root=self.settings.single_tree_root)
@@ -560,14 +560,39 @@ class MibBrowserWindow(QMainWindow):
         self._agent_status.setText(
             f"{ag.host}:{ag.port} · v{ag.version} · {ag.read_community}")
 
-    def _expand_to_mib2(self) -> None:
-        """On startup, auto-expand the path from iso down to mib-2 so the
-        user sees populated branches (system, interfaces, …) instead of a
-        single 'org' node that they have to hunt through."""
-        target = (1, 3, 6, 1, 2, 1)    # iso.org.dod.internet.mgmt.mib-2
+    def _expand_to_startup_folder(self) -> None:
+        """Auto-expand the path from the root down to settings.startup_expand_oid
+        (default: mib-2) so the user lands on populated branches instead
+        of a single 'org' node they have to hunt through. Called on
+        startup and after each MIB tree reload — including Recompile MIBs,
+        which used to leave the tree fully collapsed.
+
+        Symbolic OIDs (e.g. ``system``) are resolved through the loaded
+        MIB tree; failing that we fall back to numeric parsing, then to
+        the default mib-2 path."""
+        default_target = (1, 3, 6, 1, 2, 1)    # iso.org.dod.internet.mgmt.mib-2
+        target = default_target
+        cfg_oid = (self.settings.startup_expand_oid or "").strip()
+        if cfg_oid:
+            resolved = None
+            if self.tree is not None:
+                resolved = self.tree.resolve_name(cfg_oid)
+            if resolved is None:
+                try:
+                    resolved = tuple(int(p) for p in cfg_oid.strip(".").split("."))
+                except ValueError:
+                    resolved = None
+            if resolved:
+                target = resolved
         src_idx = self.mib_model.find_index(target)
         if not src_idx.isValid():
-            return
+            # Fall through to mib-2 if the configured target isn't in the
+            # current tree (e.g. the module was disabled after the
+            # setting was saved).
+            if target != default_target:
+                src_idx = self.mib_model.find_index(default_target)
+            if not src_idx.isValid():
+                return
         idx = self.mib_proxy.mapFromSource(src_idx)
         cur = idx
         # Expand each ancestor on the path.
@@ -708,11 +733,13 @@ class MibBrowserWindow(QMainWindow):
             m.addAction("Graph", lambda: (self.oid_edit.setText(self._instance_oid(n)),
                                            self._open_graph()))
         m.addSeparator()
-        m.addAction(_t("Bookmark…"), lambda: (
-            self.oid_edit.setText(self._instance_oid(n)),
-            self.op_combo.setCurrentText(self._default_op_for(n)),
-            self._bookmark_current_oid()))
-        m.addAction(_t("Add to Watches…"), lambda: self._add_to_watches(n))
+        m.addAction(_t("Bookmark…"), lambda: self._bookmark_node(n))
+        # Watches poll a single OID per row. Folders / tables / rows /
+        # notifications can't be sensibly Get'd, so don't offer the
+        # action at all on those nodes — it used to add an entry that
+        # then perma-errored in the Watches tab.
+        if n.is_scalar or n.is_column:
+            m.addAction(_t("Add to Watches…"), lambda: self._add_to_watches(n))
         m.addSeparator()
         m.addAction(_t("Copy OID"), lambda: QApplication.clipboard().setText(
             "." + ".".join(str(p) for p in n.oid)))
@@ -813,9 +840,31 @@ class MibBrowserWindow(QMainWindow):
         self.settings.recent_oids = []
         config.save_settings(self.settings)
 
+    def _make_filter_toggle(self, text: str, tip: str) -> QToolButton:
+        """VSCode-style inline toggle: small flat button that fills with
+        the highlight colour when checked. autoRaise makes it blend with
+        the QLineEdit edge until hovered/checked."""
+        b = QToolButton()
+        b.setText(text)
+        b.setToolTip(tip)
+        b.setCheckable(True)
+        b.setAutoRaise(True)
+        b.setFixedSize(22, 22)
+        f = b.font()
+        f.setPointSizeF(max(f.pointSizeF() - 1.0, 7.0))
+        b.setFont(f)
+        return b
+
     def _on_search_desc_toggled(self, checked: bool) -> None:
         self.mib_proxy.setSearchDescriptions(checked)
-        # Re-apply filter so current needle reruns with the new rule.
+        self._apply_mib_filter_now()
+
+    def _on_regex_toggled(self, checked: bool) -> None:
+        self.mib_proxy.setUseRegex(checked)
+        self._apply_mib_filter_now()
+
+    def _on_word_toggled(self, checked: bool) -> None:
+        self.mib_proxy.setWholeWord(checked)
         self._apply_mib_filter_now()
 
     def _find_in_tree(self) -> None:
@@ -862,6 +911,10 @@ class MibBrowserWindow(QMainWindow):
                 self.mib_view.expandAll()
         finally:
             self.mib_view.setUpdatesEnabled(True)
+        # Surface invalid regex with a red border, à la VSCode.
+        invalid = bool(text) and self.mib_proxy.regexInvalid()
+        self.mib_search.setStyleSheet(
+            "QLineEdit { border: 1px solid #d33; }" if invalid else "")
 
     def _focus_result_find(self) -> None:
         self.find_edit.setFocus()
@@ -1086,8 +1139,54 @@ class MibBrowserWindow(QMainWindow):
         # Don't close a pinned tab even if its × was somehow clicked.
         if w.property("pinned"):
             return
+        self._drain_tab_workers([w])
         self.tabs.removeTab(idx)
         w.deleteLater()
+
+    def _drain_tab_workers(self, tabs: list) -> None:
+        """Stop timers and detach in-flight QThreads from ``tabs`` before
+        the widgets get deleted.
+
+        run_op parents each QThread to the originating tab so GC doesn't
+        collect it mid-run. The flip side: removing the tab and calling
+        deleteLater also destroys those QThread children, and any that
+        are still inside a blocking pysnmp call get killed mid-flight —
+        ``QThread: Destroyed while thread is still running`` → SIGABRT.
+        Mirror what closeEvent does, but only for the tabs being closed,
+        and reparent stragglers onto self so they outlive the tab going
+        away and self-delete via thread.finished → deleteLater."""
+        pools: list[list] = []
+        for w in tabs:
+            for attr in ("_timer", "_poll_timer"):
+                tm = getattr(w, attr, None)
+                if tm is not None and hasattr(tm, "stop"):
+                    try:
+                        tm.stop()
+                    except Exception:
+                        pass
+            pool = getattr(w, "_active_threads", None)
+            if isinstance(pool, list) and pool:
+                workers.prune_threads(pool)
+                if pool:
+                    pools.append(pool)
+        if not pools:
+            return
+        # Cancel everything in parallel and give the lot a short shared
+        # budget — serialising per-tab waits felt frozen when many polling
+        # tabs were open at once.
+        workers.shutdown_pools(pools, total_ms=400)
+        for pool in pools:
+            for t in list(pool):
+                if not workers.is_thread_alive(t):
+                    continue
+                try:
+                    t.setParent(None)
+                except (RuntimeError, TypeError):
+                    continue
+                # Keep a ref so it isn't GC'd before thread.finished
+                # fires; deleteLater is already wired in run_op.
+                self._active_threads.append(t)
+            pool.clear()
 
     def _on_tab_context_menu(self, pos) -> None:
         """Right-click on a tab bar → Pin / Unpin / Close others / Close all."""
@@ -1165,19 +1264,31 @@ class MibBrowserWindow(QMainWindow):
 
     def _close_other_tabs(self, keep_idx: int) -> None:
         """Close everything except the Result tab, pinned tabs, and keep_idx."""
-        for i in range(self.tabs.count() - 1, 0, -1):
-            if i == keep_idx:
-                continue
-            if self.tabs.widget(i).property("pinned"):
-                continue
-            self._close_tab(i)
+        indices = [i for i in range(self.tabs.count() - 1, 0, -1)
+                   if i != keep_idx
+                   and not self.tabs.widget(i).property("pinned")]
+        self._batch_close_tabs(indices)
 
     def _close_all_tabs(self) -> None:
         """Close everything closable (Result tab + pinned tabs stay)."""
-        for i in range(self.tabs.count() - 1, 0, -1):
-            if self.tabs.widget(i).property("pinned"):
-                continue
-            self._close_tab(i)
+        indices = [i for i in range(self.tabs.count() - 1, 0, -1)
+                   if not self.tabs.widget(i).property("pinned")]
+        self._batch_close_tabs(indices)
+
+    def _batch_close_tabs(self, indices: list[int]) -> None:
+        """Close many tabs at once, draining their worker pools in parallel.
+
+        Calling _close_tab in a loop would serialise the 400ms shutdown
+        budget per tab — closing 10 polling tabs would feel frozen for
+        ~4s. Drain everything together, then remove. ``indices`` must
+        already be sorted high→low so removeTab doesn't shift the
+        unprocessed entries."""
+        widgets = [self.tabs.widget(i) for i in indices]
+        self._drain_tab_workers(widgets)
+        for i in indices:
+            self.tabs.removeTab(i)
+        for w in widgets:
+            w.deleteLater()
 
     def _open_table_view(self) -> None:
         from .table_view import TableViewTab
@@ -1495,6 +1606,30 @@ class MibBrowserWindow(QMainWindow):
         config.save_settings(self.settings)
         self._rebuild_bookmarks_menu()
 
+    def _bookmark_node(self, n) -> None:
+        """Tree-context-menu Bookmark — pre-selects the right view based
+        on the node kind. Tables / table entries default to 'Table View'
+        rather than the underlying 'Get Subtree' SNMP op, since a Table
+        View bookmark is what the user almost always wants on a table
+        node (matches iReasoning). The toolbar OID/op are still loaded
+        as a side effect so the user can also press Go ▶ directly."""
+        oid = self._instance_oid(n)
+        self.oid_edit.setText(oid)
+        self.op_combo.setCurrentText(self._default_op_for(n))
+        if n.is_table or n.is_table_entry:
+            seed = {"name": n.name, "oid": oid,
+                    "view": "table", "operation": ""}
+        else:
+            seed = {"name": n.name, "oid": oid,
+                    "view": "op",
+                    "operation": self._default_op_for(n)}
+        result = self._show_bookmark_editor(seed)
+        if result is None:
+            return
+        self.settings.bookmarks.append(result)
+        config.save_settings(self.settings)
+        self._rebuild_bookmarks_menu()
+
     def _run_bookmark(self, bm: dict) -> None:
         """Replay a bookmark — routes to Table View / Graph / plain op.
 
@@ -1660,17 +1795,38 @@ class MibBrowserWindow(QMainWindow):
     def _add_to_watches(self, n) -> None:
         """Entrance point from tree / result-row context menu."""
         from ..infra.config import WatchDefinition
-        from .watches_tab import AddWatchDialog
+        from .watches_tab import WatchesTab, AddWatchDialog
+        # Seed with the *instance* OID so a scalar gets `.0` appended —
+        # otherwise the saved watch fires GET on a bare object name and
+        # the agent answers noSuchInstance forever. AddWatchDialog only
+        # offers Get / Get Next, so columns (which need an index) are
+        # nudged to Get Next as a sane default.
+        op = self._default_op_for(n)
+        if op not in ("Get", "Get Next"):
+            op = "Get Next" if n.is_column else "Get"
         seed = WatchDefinition(
             name=n.name,
-            oid="." + ".".join(str(x) for x in n.oid),
-            operation=self._default_op_for(n),
+            oid=self._instance_oid(n),
+            operation=op,
         )
         d = AddWatchDialog(seed, tree=self.tree, parent=self)
         if not d.exec():
             return
         self.settings.watches.append(d.result_watch)
         config.save_settings(self.settings)
+        # If the Watches tab is already open, refill its table — the tab
+        # only re-reads settings.watches in its own Add/Edit/Remove
+        # handlers, so a new entry from the tree menu would otherwise
+        # only show up after closing and reopening the tab. ("Works once"
+        # being shorthand for "first add creates the tab and the row
+        # appears via __init__.")
+        for i in range(self.tabs.count()):
+            w = self.tabs.widget(i)
+            if isinstance(w, WatchesTab):
+                w._refill(select=len(self.settings.watches) - 1)
+                w._refresh()
+                self.tabs.setCurrentIndex(i)
+                return
         # Open/focus the tab so the user sees what they added.
         self._open_watches()
 
@@ -1698,7 +1854,8 @@ class MibBrowserWindow(QMainWindow):
         tbl.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         tbl.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         tbl.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
-        tbl.horizontalHeader().setStretchLastSection(False)
+        tbl.horizontalHeader().setSectionResizeMode(
+            tbl.columnCount() - 1, QHeaderView.ResizeMode.Stretch)
 
         def _op_label(bm: dict) -> str:
             view = bm.get("view", "op")
@@ -1714,8 +1871,8 @@ class MibBrowserWindow(QMainWindow):
                 tbl.setItem(r, 0, QTableWidgetItem(bm.get("name", "")))
                 tbl.setItem(r, 1, QTableWidgetItem(bm.get("oid", "")))
                 tbl.setItem(r, 2, QTableWidgetItem(_op_label(bm)))
-            tbl.resizeColumnsToContents()
-            tbl.horizontalHeader().setStretchLastSection(True)
+            for c in range(tbl.columnCount() - 1):
+                tbl.resizeColumnToContents(c)
             if self.settings.bookmarks:
                 tbl.selectRow(max(0, min(select, tbl.rowCount() - 1)))
 
@@ -1848,6 +2005,7 @@ class MibBrowserWindow(QMainWindow):
     def _open_preferences(self) -> None:
         from .prefs_dialog import PreferencesDialog
         prev_single_root = self.settings.single_tree_root
+        prev_startup_oid = self.settings.startup_expand_oid
         d = PreferencesDialog(self.settings, self)
         if d.exec():
             # Reflect changes in the toolbar; language needs restart (dialog
@@ -1859,6 +2017,10 @@ class MibBrowserWindow(QMainWindow):
             # single_tree_root affects tree structure — rebuild if toggled.
             if self.settings.single_tree_root != prev_single_root:
                 self._reload_mib_tree()
+            elif self.settings.startup_expand_oid != prev_startup_oid:
+                # No need to rebuild the model, just re-expand to the
+                # newly-configured branch.
+                self._expand_to_startup_folder()
 
     def _open_mib_modules(self) -> None:
         from .mib_modules_dialog import MibModulesDialog
@@ -1913,6 +2075,7 @@ class MibBrowserWindow(QMainWindow):
         from ..infra import config
         self.store.set_enabled(self.settings.enabled_mibs or [])
         self._refresh_tree_views()
+        self._expand_to_startup_folder()
         self.status.showMessage(
             f"MIB tree reloaded: {len(self.tree.modules)} modules, "
             f"{len(self.tree._by_name)} names")
@@ -1993,6 +2156,10 @@ class MibBrowserWindow(QMainWindow):
             # available_modules() — what's on disk now.
             self.store.set_enabled(self.store.available_modules())
             self._refresh_tree_views()
+            # Re-expand the configured startup branch (default mib-2) —
+            # the rebuild swaps in a fresh tree model and would otherwise
+            # leave the user staring at a fully-collapsed root.
+            self._expand_to_startup_folder()
             # Count source-vs-dependency modules for the status message.
             compiler = PysmiMibCompiler(config.compiled_mibs_dir())
             src_modules = set(compiler.discover([config.default_mibs_src()]))

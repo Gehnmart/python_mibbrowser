@@ -37,3 +37,25 @@ def test_empty_threshold_is_none():
 
 def test_unknown_op_returns_none():
     assert _evaluate_condition("5", "~=", "3") is None
+
+
+def test_value_with_unit_suffix():
+    # "111 packets" should still threshold sensibly — pull the leading
+    # numeric token. The original report was "value=110 / threshold=110
+    # alarms" — sanity-check both halves of the strict-> at the boundary.
+    assert _evaluate_condition("111 packets", ">", "110") is True
+    assert _evaluate_condition("110 packets", ">", "110") is False
+    assert _evaluate_condition("110 packets", ">=", "110") is True
+
+
+def test_timeticks_uses_raw_count_in_parens():
+    # _format_timeticks ends each render with the raw 1/100s count in
+    # parens — that's the unit a user types in the threshold field.
+    assert _evaluate_condition("1 minute 51.00 seconds (11100)",
+                                ">", "11000") is True
+    assert _evaluate_condition("1 minute 51.00 seconds (11100)",
+                                ">", "11200") is False
+
+
+def test_strips_whitespace_for_string_compare():
+    assert _evaluate_condition(" up ", "==", "up") is True

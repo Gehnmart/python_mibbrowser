@@ -17,6 +17,7 @@ from __future__ import annotations
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import (
     QAbstractItemView,
+    QHeaderView,
     QLabel,
     QPushButton,
     QTableWidget,
@@ -98,7 +99,8 @@ class DeviceSnapshotTab(QWidget):
         self.basic_tbl.setShowGrid(False)
         self.basic_tbl.setAlternatingRowColors(True)
         self.basic_tbl.setMaximumHeight(200)
-        self.basic_tbl.horizontalHeader().setStretchLastSection(True)
+        self.basic_tbl.horizontalHeader().setSectionResizeMode(
+            self.basic_tbl.columnCount() - 1, QHeaderView.ResizeMode.Stretch)
         v.addWidget(self.basic_tbl)
 
         # --- Interfaces panel ---
@@ -109,7 +111,8 @@ class DeviceSnapshotTab(QWidget):
         self.if_tbl.setEditTriggers(
             QAbstractItemView.EditTrigger.NoEditTriggers)
         self.if_tbl.setAlternatingRowColors(True)
-        self.if_tbl.horizontalHeader().setStretchLastSection(True)
+        self.if_tbl.horizontalHeader().setSectionResizeMode(
+            self.if_tbl.columnCount() - 1, QHeaderView.ResizeMode.Stretch)
         v.addWidget(self.if_tbl, 1)
 
         # --- Resources panel ---
@@ -122,7 +125,8 @@ class DeviceSnapshotTab(QWidget):
             QAbstractItemView.EditTrigger.NoEditTriggers)
         self.hr_tbl.setShowGrid(False)
         self.hr_tbl.setMaximumHeight(120)
-        self.hr_tbl.horizontalHeader().setStretchLastSection(True)
+        self.hr_tbl.horizontalHeader().setSectionResizeMode(
+            self.hr_tbl.columnCount() - 1, QHeaderView.ResizeMode.Stretch)
         v.addWidget(self.hr_tbl)
 
         self.status = QLabel("")
@@ -208,8 +212,11 @@ class DeviceSnapshotTab(QWidget):
                     elif "down" in lv:
                         item.setForeground(Qt.GlobalColor.darkRed)
                 self.if_tbl.setItem(r, c, item)
-        self.if_tbl.resizeColumnsToContents()
-        self.if_tbl.horizontalHeader().setStretchLastSection(True)
+        # Last column is in Stretch mode and auto-fills — sizing it via
+        # resizeColumnsToContents() would trim it back to content width
+        # until the next header resize event.
+        for c in range(self.if_tbl.columnCount() - 1):
+            self.if_tbl.resizeColumnToContents(c)
         agent = self._current_agent_fn()
         self.status.setText(_t(
             "Snapshot from {host}:{port} · {rows} interfaces"
@@ -237,5 +244,5 @@ class DeviceSnapshotTab(QWidget):
             f = key_item.font(); f.setBold(True); key_item.setFont(f)
             tbl.setItem(r, 0, key_item)
             tbl.setItem(r, 1, QTableWidgetItem(v))
-        tbl.resizeColumnsToContents()
-        tbl.horizontalHeader().setStretchLastSection(True)
+        for c in range(tbl.columnCount() - 1):
+            tbl.resizeColumnToContents(c)

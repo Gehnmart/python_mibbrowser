@@ -93,6 +93,15 @@ class PreferencesDialog(QDialog):
                      "When off, the top level lists iso's immediate children "
                      "(org, etc.) side-by-side — useful if you always work "
                      "inside mgmt.mib-2 and want one less click."))
+
+        self.startup_oid_edit = QLineEdit(settings.startup_expand_oid)
+        self.startup_oid_edit.setPlaceholderText(".1.3.6.1.2.1  (mib-2)")
+        self._row(gl, _t("Startup folder OID"),
+                  self.startup_oid_edit,
+                  _t("MIB tree branch auto-expanded at startup and after "
+                     "each tree reload (e.g. Recompile MIBs). Numeric or "
+                     "symbolic — 'system', '.1.3.6.1.2.1.2', etc. Empty = "
+                     "the default mib-2 path."))
         tabs.addTab(g, _t("General"))
 
         # --- SNMP defaults -----------------------------------------------
@@ -285,6 +294,7 @@ class PreferencesDialog(QDialog):
         s = self.settings
         s.language = self.lang_combo.currentData()
         s.single_tree_root = self.tree_root_chk.isChecked()
+        s.startup_expand_oid = self.startup_oid_edit.text().strip()
 
         # Write to default_agent (the template for NEW agents). Current
         # agent is untouched — the user updates that via Advanced… or the

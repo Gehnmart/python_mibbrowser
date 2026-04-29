@@ -10,6 +10,7 @@ from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtWidgets import (
     QAbstractItemView,
     QFileDialog,
+    QHeaderView,
     QLabel,
     QPushButton,
     QTableWidget,
@@ -77,12 +78,14 @@ class PollTab(QWidget):
         self.tbl.setEditTriggers(
             QAbstractItemView.EditTrigger.NoEditTriggers)
         self.tbl.setAlternatingRowColors(True)
-        self.tbl.horizontalHeader().setStretchLastSection(True)
+        self.tbl.horizontalHeader().setSectionResizeMode(
+            self.tbl.columnCount() - 1, QHeaderView.ResizeMode.Stretch)
         for r, key in enumerate(self.poll.agents):
             self.tbl.setItem(r, 0, QTableWidgetItem(key))
             for c in range(1, len(headers)):
                 self.tbl.setItem(r, c, QTableWidgetItem(""))
-        self.tbl.resizeColumnsToContents()
+        for c in range(self.tbl.columnCount() - 1):
+            self.tbl.resizeColumnToContents(c)
         v.addWidget(self.tbl, 1)
 
         self.status_label = QLabel("")

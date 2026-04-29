@@ -29,6 +29,7 @@ from PyQt6.QtWidgets import (
     QFileDialog,
     QFormLayout,
     QHBoxLayout,
+    QHeaderView,
     QLabel,
     QLineEdit,
     QMessageBox,
@@ -85,28 +86,67 @@ def _read_history(limit: int = 5000) -> list[dict]:
 
 OP_CHOICES = ("Get", "Get Next")
 COND_CHOICES = (">", ">=", "<", "<=", "==", "!=")
+# Inverse of each comparison op — used to spell out the alarm side of the
+# predicate in the dialog ("Normal: > 110  ·  Alarm: ≤ 110") so the user
+# can see both halves at once.
+_INVERSE_OP = {
+    ">": "≤", ">=": "<", "<": "≥", "<=": ">",
+    "==": "≠", "!=": "=",
+}
+
+
+def _coerce_numeric(s) -> float | None:
+    """Best-effort number extraction from an SNMP display value.
+
+    Plain ints/floats parse directly. TimeTicks render as
+    ``"1 hour 50.00 seconds (660000)"`` — pull the trailing parenthesised
+    raw count, which is the unit users actually thresholding on.
+    Otherwise fall back to a leading numeric token (e.g. ``"111 packets"``
+    → 111). Returns None if nothing numeric can be salvaged."""
+    import re
+    text = str(s).strip()
+    if not text:
+        return None
+    try:
+        return float(text)
+    except ValueError:
+        pass
+    m = re.search(r"\(\s*([+-]?\d+(?:\.\d+)?)\s*\)\s*$", text)
+    if m:
+        try:
+            return float(m.group(1))
+        except ValueError:
+            pass
+    m = re.match(r"^[+-]?\d+(?:\.\d+)?", text)
+    if m:
+        try:
+            return float(m.group(0))
+        except ValueError:
+            pass
+    return None
 
 
 def _evaluate_condition(value: str, op: str, threshold: str) -> bool | None:
     """Return True if condition holds, False if not, None if not comparable.
 
-    Tries float comparison first (handles counters, gauges, ints). Falls
-    back to string compare for == / != only — you can't meaningfully
-    "greater than" an OctetString."""
-    try:
-        lv = float(value)
-        rv = float(threshold)
+    Tries numeric comparison first — including light coercion so values
+    with units (``"111 packets"``) or TimeTicks (``"... (660000)"``)
+    still threshold sensibly. Falls back to string compare for == / !=
+    only — you can't meaningfully 'greater than' an OctetString."""
+    lv = _coerce_numeric(value)
+    rv = _coerce_numeric(threshold)
+    if lv is not None and rv is not None:
         return {
             ">": lv > rv, ">=": lv >= rv,
             "<": lv < rv, "<=": lv <= rv,
             "==": lv == rv, "!=": lv != rv,
         }.get(op)
-    except (TypeError, ValueError):
-        if op == "==":
-            return str(value) == str(threshold)
-        if op == "!=":
-            return str(value) != str(threshold)
-        return None
+    sval, sthr = str(value).strip(), str(threshold).strip()
+    if op == "==":
+        return sval == sthr
+    if op == "!=":
+        return sval != sthr
+    return None
 
 
 class AddWatchDialog(QDialog):
@@ -136,15 +176,39 @@ class AddWatchDialog(QDialog):
         self.cond_val = QLineEdit(seed.condition_value)
         crow.addWidget(self.cond_op); crow.addWidget(self.cond_val, 1)
 
+        # Live-updated hint that spells out the alarm side of the
+        # predicate too. The bare "Normal state if result > 110" wording
+        # was misread as "alarm if > 110", so make both sides explicit.
+        self.cond_hint = QLabel("")
+        self.cond_hint.setStyleSheet("color: #666; font-style: italic;")
+        self.cond_hint.setWordWrap(True)
+        self.cond_op.currentTextChanged.connect(self._update_cond_hint)
+        self.cond_val.textChanged.connect(self._update_cond_hint)
+
         form.addRow("OID:", self.oid_edit)
         form.addRow(_t("Name") + ":", self.name_edit)
         form.addRow(_t("SNMP Operation") + ":", self.op_combo)
         form.addRow(_t("Normal state if result") + ":", cond_row)
+        form.addRow("", self.cond_hint)
+        self._update_cond_hint()
 
         bb = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok
                               | QDialogButtonBox.StandardButton.Cancel)
         bb.accepted.connect(self._accept); bb.rejected.connect(self.reject)
         form.addRow(bb)
+
+    def _update_cond_hint(self) -> None:
+        op = self.cond_op.currentText()
+        val = self.cond_val.text().strip()
+        if not val:
+            self.cond_hint.setText(_t(
+                "Tip: enter the value the result must satisfy to count "
+                "as normal — anything else is an alarm."))
+            return
+        inv = _INVERSE_OP.get(op, op)
+        self.cond_hint.setText(_t(
+            "Normal: result {op} {val}    ·    Alarm: result {inv} {val}"
+        ).format(op=op, val=val, inv=inv))
 
     def _accept(self) -> None:
         oid = self.oid_edit.text().strip()
@@ -257,7 +321,15 @@ class WatchesTab(QWidget):
         self.tbl.setSelectionMode(
             QAbstractItemView.SelectionMode.SingleSelection)
         self.tbl.doubleClicked.connect(lambda _=None: self._edit_watch())
-        self.tbl.horizontalHeader().setStretchLastSection(True)
+        # Stretch the last column. setStretchLastSection is convenient
+        # but only re-applies on the *next* header resize event — so a
+        # subsequent resizeColumnsToContents() in _refill leaves the
+        # table narrower than the tab until the user nudges a column.
+        # Stretch resize-mode is sticky: Qt restretches automatically on
+        # every header geometry change.
+        hdr = self.tbl.horizontalHeader()
+        hdr.setSectionResizeMode(
+            self.tbl.columnCount() - 1, QHeaderView.ResizeMode.Stretch)
         v.addWidget(self.tbl, 1)
 
         self.status_label = QLabel("")
@@ -278,8 +350,12 @@ class WatchesTab(QWidget):
                     if w.condition_value != "" else ""))
             self.tbl.setItem(r, 3, QTableWidgetItem(""))
             self.tbl.setItem(r, 4, QTableWidgetItem(""))
-        self.tbl.resizeColumnsToContents()
-        self.tbl.horizontalHeader().setStretchLastSection(True)
+        # Size every column except the last (which is in Stretch mode and
+        # auto-fills) — calling resizeColumnsToContents() on the whole
+        # table would shrink the stretched section too and the table
+        # would stop reaching the right edge of the tab.
+        for c in range(self.tbl.columnCount() - 1):
+            self.tbl.resizeColumnToContents(c)
         if 0 <= select < len(self.settings.watches):
             self.tbl.selectRow(select)
 
@@ -331,7 +407,22 @@ class WatchesTab(QWidget):
             return
         del self.settings.watches[r]
         config.save_settings(self.settings)
-        self._refill(select=max(0, r - 1))
+        # Drop just the deleted row from the table. _refill would
+        # rebuild every row from settings.watches and blank out Value/
+        # Status/Last Query for the survivors until the next poll
+        # tick — visually as if every other watch had also reset.
+        self.tbl.removeRow(r)
+        # _last_state is keyed by row index. Removing row `r` shifts
+        # everything below up by one, so reindex the dict to keep
+        # transition logging mapped to the right watches.
+        self._last_state = {
+            (k if k < r else k - 1): v
+            for k, v in self._last_state.items()
+            if k != r
+        }
+        new_sel = min(r, self.tbl.rowCount() - 1)
+        if new_sel >= 0:
+            self.tbl.selectRow(new_sel)
 
     # --- refresh ------------------------------------------------------
 
@@ -508,7 +599,8 @@ class HistoryDialog(QDialog):
         self.tbl.verticalHeader().setVisible(False)
         self.tbl.setEditTriggers(
             QAbstractItemView.EditTrigger.NoEditTriggers)
-        self.tbl.horizontalHeader().setStretchLastSection(True)
+        self.tbl.horizontalHeader().setSectionResizeMode(
+            self.tbl.columnCount() - 1, QHeaderView.ResizeMode.Stretch)
         v.addWidget(self.tbl, 1)
 
         self.status = QLabel("")
@@ -556,8 +648,8 @@ class HistoryDialog(QDialog):
                         item.setBackground(QBrush(QColor("#2e7d32")))
                         item.setForeground(QBrush(QColor("white")))
                 self.tbl.setItem(r, c, item)
-        self.tbl.resizeColumnsToContents()
-        self.tbl.horizontalHeader().setStretchLastSection(True)
+        for c in range(self.tbl.columnCount() - 1):
+            self.tbl.resizeColumnToContents(c)
         self.status.setText(
             _t("{shown} of {total} event(s)").format(
                 shown=len(rows), total=len(self._events)))
