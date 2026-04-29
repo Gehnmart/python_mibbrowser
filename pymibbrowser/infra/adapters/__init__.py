@@ -10,6 +10,7 @@ from .file_sink import FileSink, NullSink
 from .logger import CallbackLogger, PrintLogger
 from .mib_compiler import PysmiMibCompiler
 from .mib_store import MibTreeStore
+from .notifier import CallbackNotifier, DesktopNotifier
 from .resolver import MibTreeResolver, NumericResolver
 from .settings import JsonFileSettingsStore, default_settings_store
 from .snmp import PysnmpTransport
@@ -17,6 +18,8 @@ from .traps import PysnmpTrapPublisher, UdpTrapSubscription
 
 __all__ = [
     "CallbackLogger",
+    "CallbackNotifier",
+    "DesktopNotifier",
     "FileSink",
     "JsonFileSettingsStore",
     "MibTreeResolver",

@@ -118,6 +118,10 @@ class AppSettings:
     trap_port: int = 162
     max_graph_points: int = 600
     single_tree_root: bool = True
+    # OID (numeric or symbolic) auto-expanded in the MIB tree at startup
+    # and after each tree reload. Empty = the iReasoning-style default
+    # of iso.org.dod.internet.mgmt.mib-2.
+    startup_expand_oid: str = ""
     show_log_pane: bool = True
     lenient_mib_parser: bool = True
     logging_level: str = "INFO"

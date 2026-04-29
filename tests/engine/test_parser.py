@@ -2,9 +2,14 @@
 from __future__ import annotations
 
 from pymibbrowser.engine.ast import (
+    Abort,
     Get,
     GetNext,
     If,
+    IfBlock,
+    Let,
+    Notify,
+    Print,
     Save,
     Set,
     Sleep,
@@ -202,6 +207,206 @@ def test_if_compare_email_with_recipient():
 def test_if_unparseable_unknown():
     cmd = parse_command("if total nonsense")
     assert cmd == Unknown(text="if total nonsense", reason="invalid if")
+
+
+def test_if_var_lhs_compare():
+    """`if $now > $prev sound` — variable LHS replaces the legacy bare
+    `$` placeholder. Substitution happens at run time; the parser
+    just captures the literal token in the lhs field."""
+    cmd = parse_command("if $now > $prev sound")
+    assert cmd == If(predicate=">", operand="$prev",
+                     action="sound", arg="", lhs="$now")
+
+
+def test_if_var_lhs_err():
+    cmd = parse_command("if $saved err sleep 1")
+    assert cmd == If(predicate="err", operand="",
+                     action="sleep", arg="1", lhs="$saved")
+
+
+def test_if_bare_dollar_lhs_default_in_legacy_form():
+    """Legacy form must still parse identically — bare `$` lhs is the
+    default, so old scripts and old tests don't see a difference."""
+    cmd = parse_command("if $ > 50 sleep 1")
+    assert cmd.lhs == "$"
+
+
+# --- let ------------------------------------------------------------------
+
+def test_let_simple():
+    assert parse_command("let host 127.0.0.1") == Let(name="host",
+                                                       value="127.0.0.1")
+
+
+def test_let_equals_sign_optional():
+    assert parse_command("let host = 127.0.0.1") == Let(name="host",
+                                                         value="127.0.0.1")
+
+
+def test_let_value_can_contain_spaces():
+    """The RHS is "the rest of the line" — quoting isn't required and
+    embedded spaces survive into the bound value (matches `save` behaviour)."""
+    assert parse_command("let msg hello world") == Let(name="msg",
+                                                        value="hello world")
+
+
+def test_let_built_in_capture():
+    """`let prev $last` is the snapshot idiom — it must round-trip
+    through the parser as a literal value; substitution only happens at
+    run time."""
+    assert parse_command("let prev $last") == Let(name="prev", value="$last")
+
+
+def test_let_missing_value_unknown():
+    assert parse_command("let host") == Unknown(text="let host",
+                                                  reason="unknown command")
+
+
+def test_let_equals_with_no_rhs_unknown():
+    assert parse_command("let host =") == Unknown(text="let host =",
+                                                    reason="unknown command")
+
+
+def test_let_invalid_name_unknown():
+    """Variable names follow the [A-Za-z_][A-Za-z0-9_]* rule. A leading
+    digit or punctuation must be rejected so `$$NAME` substitution
+    semantics stay unambiguous."""
+    assert parse_command("let 1bad value") == Unknown(text="let 1bad value",
+                                                       reason="unknown command")
+
+
+# --- print / notify / abort ----------------------------------------------
+
+def test_print_simple():
+    assert parse_command("print hello") == Print(message="hello")
+
+
+def test_print_quoted_strips_pair():
+    """Surrounding quotes are stripped so `print "msg"` lands as
+    just `msg` in the log; mid-string quotes are left alone."""
+    assert parse_command('print "hello world"') == Print(message="hello world")
+    assert parse_command("print 'single'") == Print(message="single")
+
+
+def test_print_with_substitution_token_is_literal():
+    """The parser stores ``$`` references verbatim; expansion happens
+    at run time."""
+    assert parse_command("print value=$last") == Print(message="value=$last")
+
+
+def test_print_empty_allowed():
+    assert parse_command("print") == Print(message="")
+
+
+def test_notify_simple():
+    assert parse_command("notify boom") == Notify(message="boom")
+
+
+def test_notify_quoted():
+    assert parse_command('notify "agent down"') == Notify(message="agent down")
+
+
+def test_abort_simple():
+    assert parse_command("abort") == Abort()
+
+
+# --- if as inline action -------------------------------------------------
+
+def test_if_inline_print_action():
+    cmd = parse_command('if $ > 50 print "alert"')
+    assert cmd == If(predicate=">", operand="50", action="print",
+                     arg='"alert"', lhs="$")
+
+
+def test_if_inline_abort_action():
+    cmd = parse_command("if $ err abort")
+    assert cmd == If(predicate="err", operand="", action="abort",
+                     arg="", lhs="$")
+
+
+# --- block-form if --------------------------------------------------------
+
+def test_if_block_then_only():
+    text = """
+if $now > $prev
+    print up
+end
+"""
+    s = parse_script(text)
+    assert s.commands == (
+        IfBlock(predicate=">", operand="$prev", lhs="$now",
+                then_body=(Print(message="up"),),
+                else_body=()),
+    )
+
+
+def test_if_block_with_else():
+    text = """
+if $a > $b
+    print high
+else
+    print low
+end
+"""
+    s = parse_script(text)
+    assert s.commands == (
+        IfBlock(predicate=">", operand="$b", lhs="$a",
+                then_body=(Print(message="high"),),
+                else_body=(Print(message="low"),)),
+    )
+
+
+def test_if_block_err_predicate():
+    text = """
+if $ err
+    notify "down"
+    abort
+end
+"""
+    s = parse_script(text)
+    assert s.commands == (
+        IfBlock(predicate="err", operand="", lhs="$",
+                then_body=(Notify(message="down"), Abort()),
+                else_body=()),
+    )
+
+
+def test_if_block_nested():
+    text = """
+if $a > 0
+    if $b > 0
+        print "both positive"
+    else
+        print "a only"
+    end
+end
+"""
+    s = parse_script(text)
+    inner = IfBlock(predicate=">", operand="0", lhs="$b",
+                    then_body=(Print(message="both positive"),),
+                    else_body=(Print(message="a only"),))
+    outer = IfBlock(predicate=">", operand="0", lhs="$a",
+                    then_body=(inner,), else_body=())
+    assert s.commands == (outer,)
+
+
+def test_if_block_missing_end_unknown():
+    """Unterminated block must surface as Unknown rather than swallow
+    the rest of the script silently."""
+    text = """
+if $a > 0
+    print never
+"""
+    s = parse_script(text)
+    assert s.commands and isinstance(s.commands[-1], Unknown)
+    assert s.commands[-1].reason == "invalid if"
+
+
+def test_orphan_end_unknown():
+    """`end` without a matching `if`-block becomes an Unknown command
+    so the user sees a diagnostic."""
+    s = parse_script("end\n")
+    assert s.commands == (Unknown(text="end", reason="unknown command"),)
 
 
 # --- unknown --------------------------------------------------------------

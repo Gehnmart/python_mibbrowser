@@ -63,24 +63,76 @@ REFERENCE_HTML = """
     <td>Redirect result lines into this file. Repeat runs create
     <code>foo.txt.1</code>, <code>foo.txt.2</code>, … so you don't
     clobber the last run.</td></tr>
-<tr><td><code>if $ &lt;op&gt; &lt;value&gt; &lt;action&gt; [arg]</code></td>
-    <td>Conditional on the <b>last</b> result. <code>op</code> is one of
+<tr><td><code>if &lt;lhs&gt; &lt;op&gt; &lt;value&gt; &lt;action&gt; [arg]</code></td>
+    <td>One-line conditional. <code>lhs</code> is <code>$</code> (last
+    result) or any <code>$NAME</code> variable. <code>op</code> is
     <code>&gt;</code>, <code>&lt;</code>, <code>&gt;=</code>,
     <code>&lt;=</code>, <code>=</code>, <code>!=</code>, or
     <code>err</code> (true when the previous command failed).
-    <code>action</code> is <code>sound</code> (terminal bell),
-    <code>email ADDR</code>, or <code>sleep N</code>.</td></tr>
+    <code>action</code> is <code>sound</code>, <code>print MSG</code>,
+    <code>notify MSG</code>, <code>email ADDR</code>,
+    <code>sleep N</code>, or <code>abort</code>. Block form below for
+    multi-action branches.</td></tr>
+<tr><td><code>let &lt;name&gt; [=] &lt;value&gt;</code></td>
+    <td>Bind a variable for use in later commands. Names match
+    <code>[A-Za-z_][A-Za-z0-9_]*</code>; the <code>=</code> is
+    optional. The right-hand side is itself substituted, so
+    <code>let prev $last</code> snapshots the most recent result.</td></tr>
+<tr><td><code>print &lt;message&gt;</code></td>
+    <td>Emit a line through the log pane. <code>$</code> substitution
+    applies, surrounding quotes are stripped:
+    <code>print "uptime is $last"</code>.</td></tr>
+<tr><td><code>notify &lt;message&gt;</code></td>
+    <td>Desktop notification (libnotify on Linux, osascript on macOS).
+    Falls back to a <code>[notify]</code>-tagged log line if no
+    backend is available.</td></tr>
+<tr><td><code>abort</code></td>
+    <td>Stop the script immediately. Subsequent commands — including
+    those inside enclosing <code>if</code>-blocks — are skipped.</td></tr>
 </table>
+
+<h3>Block conditionals</h3>
+<p>Drop the action token to make <code>if</code> a multi-line block.
+Close with <code>end</code>; <code>else</code> in between is optional.
+Blocks nest, and any command (including another <code>if</code>) can
+appear inside.</p>
+<pre>if $now &gt; $prev
+    print "rate up: $prev → $now"
+    notify "Counter increased"
+else
+    print "stable: $now"
+end</pre>
+<p>One-liners stay supported as a shorthand for a single-action body:
+<code>if $ &gt; 50 sound</code>, <code>if $ err abort</code>.</p>
 
 <h3>OID forms</h3>
 <p>Both symbolic and dotted numeric work, resolved through the loaded
 MIB tree: <code>sysUpTime.0</code>, <code>.1.3.6.1.2.1.1.3.0</code>,
 <code>ifInOctets.4</code>.</p>
 
-<h3>Variables (not supported yet)</h3>
-<p>This runner implements iReasoning's core commands — no variable
-substitution or loops. Use a wrapper shell script if you need loops
-over hosts.</p>
+<h3>Variables</h3>
+<p>Reference any bound variable as <code>$NAME</code> in a host, OID,
+SET value, save target, or <code>if</code> operand/arg. A variable
+that holds <code>host:port</code> still routes correctly when used as
+the host token (the runner re-splits after substitution). Two
+built-ins are always available without an explicit
+<code>let</code>:</p>
+<ul>
+  <li><code>$last</code> — display value of the most recent SNMP
+  result (empty before the first command runs);</li>
+  <li><code>$err</code> — last error flag, <code>"0"</code> on
+  success, <code>"1"</code> after a failed command.</li>
+</ul>
+<p>Unknown <code>$NAME</code> tokens are left as the literal text so
+the failure surfaces as an "unresolved OID" or socket error rather
+than a silently-empty token.</p>
+<pre>let target = 127.0.0.1:11161
+let oid    = sysUpTime.0
+get $target $oid
+let prev $last
+sleep 5
+get $target $oid
+if $ &gt; $prev sound</pre>
 """
 
 
@@ -110,6 +162,38 @@ if $ < 6000 sound
 EXAMPLE_SET = """\
 # Set two scalars on a device. 's' = OctetString (text), 'i' = Integer.
 set 127.0.0.1:161 sysContact.0 s "admin@example.com" sysLocation.0 s "rack-A"
+"""
+
+EXAMPLE_BLOCK = """\
+# Block-form if / else / end with print + notify + abort.
+# Sample sysUpTime twice; react to up / steady / agent-down.
+
+let target = 127.0.0.1:161
+let oid    = sysUpTime.0
+
+get $target $oid
+if $ err
+    print "agent unreachable on first probe — bailing out"
+    abort
+end
+let prev $last
+
+sleep 5
+
+get $target $oid
+if $ err
+    notify "agent went away mid-run"
+    abort
+end
+let now $last
+
+if $now > $prev
+    print "uptime advancing: $prev → $now"
+    notify "agent is alive ($now ticks)"
+else
+    print "uptime did not advance — counter wrap or restart?"
+    notify "sysUpTime stalled at $now"
+end
 """
 
 
@@ -196,6 +280,7 @@ class ScriptDialog(QDialog):
         self._add_example_btn(ex_row, _t("Periodic GET"), EXAMPLE_PROBE)
         self._add_example_btn(ex_row, _t("Threshold alarm"), EXAMPLE_ALARM)
         self._add_example_btn(ex_row, _t("Bulk SET"), EXAMPLE_SET)
+        self._add_example_btn(ex_row, _t("Block if/else"), EXAMPLE_BLOCK)
         ex_row.addStretch()
 
         self.output = QPlainTextEdit()

@@ -55,6 +55,14 @@ class Logger(Protocol):
     def log(self, message: str) -> None: ...
 
 
+class Notifier(Protocol):
+    """Surface a desktop / system notification. Best-effort: failures
+    raise (the runner falls back to logging). Used by script ``notify``
+    commands."""
+
+    def notify(self, message: str) -> None: ...
+
+
 class OutputSink(Protocol):
     """Result-line stream with optional save-to-target buffering.
 

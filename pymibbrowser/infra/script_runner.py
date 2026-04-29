@@ -19,6 +19,7 @@ from ..engine.parser import parse_script
 from ..engine.runner import ExecutionContext, execute
 from .adapters import (
     CallbackLogger,
+    DesktopNotifier,
     FileSink,
     MibTreeResolver,
     PrintLogger,
@@ -56,5 +57,6 @@ def run(path: str, agent: Agent, tree: MibTree,
         logger=log_adapter,
         sink=sink,
         cancel=should_cancel or (lambda: False),
+        notifier=DesktopNotifier(),
     )
     execute(script, ctx)
