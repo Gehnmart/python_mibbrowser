@@ -92,8 +92,8 @@ class IfBlock:
     predicate: str           # "err" or one of >, <, >=, <=, =, !=
     operand: str             # "" when predicate == "err"
     lhs: str                 # "$" (last result) or "$NAME"
-    then_body: tuple
-    else_body: tuple
+    then_body: tuple[Command, ...]
+    else_body: tuple[Command, ...]
 
 
 @dataclass(frozen=True)

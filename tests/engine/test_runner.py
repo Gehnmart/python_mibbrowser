@@ -636,10 +636,6 @@ class TestVariables:
         # Direct peek into the runner state via re-execution isn't easy
         # from outside, so verify the behavioural consequence: a follow-
         # up `if $ = 1 sound` on the saved flag fires.
-        snmp_ok = RecordingSnmp(get_fn=lambda _a, _o: [
-            VarBind(oid=(1, 3, 6, 1, 2, 1, 1, 3, 0),
-                    type_name="TimeTicks", display_value="0"),
-        ])
         logger = ListLogger()
         ctx2 = _ctx(snmp=RecordingSnmp(get_fn=boom), logger=logger)
         _run("get 127.0.0.1 sysUpTime.0\n"

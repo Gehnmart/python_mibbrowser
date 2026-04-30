@@ -8,6 +8,7 @@ same diagnostics the original implementation did.
 from __future__ import annotations
 
 import re
+from collections.abc import Iterator
 
 from .ast import (
     Abort,
@@ -164,7 +165,7 @@ def parse_script(text: str, default_port: int = 161) -> Script:
     return Script(commands=tuple(commands))
 
 
-def _parse_block(it, default_port: int,
+def _parse_block(it: Iterator[str], default_port: int,
                   end_tokens: tuple[str, ...]) -> tuple[list[Command], str]:
     """Read commands until one of ``end_tokens`` (e.g. ``("else", "end")``)
     appears as the line's first token, or until the iterator is
@@ -210,7 +211,7 @@ def _parse_block(it, default_port: int,
     return commands, ""
 
 
-def _try_parse_if_block_header(line: str) -> dict | None:
+def _try_parse_if_block_header(line: str) -> dict[str, str] | None:
     """Recognise ``if $ > 50`` / ``if $now err`` (no trailing action)
     and return the parsed pieces. Returns None for one-liners and for
     non-`if` lines."""

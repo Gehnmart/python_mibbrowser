@@ -25,9 +25,11 @@ class DesktopNotifier:
     def _detect(self) -> Callable[[str], None] | None:
         if shutil.which("notify-send"):
             app = self._app
-            return lambda msg: subprocess.run(
-                ["notify-send", app, msg],
-                check=False, timeout=2)
+            def _libnotify(msg: str) -> None:
+                subprocess.run(
+                    ["notify-send", app, msg],
+                    check=False, timeout=2)
+            return _libnotify
         if shutil.which("osascript"):
             app = self._app
             def _osa(msg: str) -> None:

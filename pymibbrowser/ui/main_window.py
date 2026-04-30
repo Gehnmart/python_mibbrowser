@@ -1795,7 +1795,7 @@ class MibBrowserWindow(QMainWindow):
     def _add_to_watches(self, n) -> None:
         """Entrance point from tree / result-row context menu."""
         from ..infra.config import WatchDefinition
-        from .watches_tab import WatchesTab, AddWatchDialog
+        from .watches_tab import AddWatchDialog, WatchesTab
         # Seed with the *instance* OID so a scalar gets `.0` appended —
         # otherwise the saved watch fires GET on a bare object name and
         # the agent answers noSuchInstance forever. AddWatchDialog only

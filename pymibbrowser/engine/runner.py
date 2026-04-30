@@ -13,6 +13,7 @@ from dataclasses import dataclass, field
 
 from .ast import (
     Abort,
+    Command,
     Get,
     GetNext,
     If,
@@ -58,8 +59,8 @@ def execute(script: Script, ctx: ExecutionContext) -> None:
     ctx.sink.close()
 
 
-def _execute_commands(commands: tuple, ctx: ExecutionContext,
-                       state: "_RunState") -> None:
+def _execute_commands(commands: tuple[Command, ...], ctx: ExecutionContext,
+                       state: _RunState) -> None:
     """Run a flat sequence of commands. Used both for the top-level
     script and for if-block bodies. Cancellation and ``abort`` are
     checked at every step so they propagate out of arbitrarily-deep
@@ -138,7 +139,7 @@ def _subst(text: str, state: _RunState) -> str:
     names are left as the literal ``$NAME`` so the failure surfaces in
     the next layer (resolver / SNMP) with a useful diagnostic instead
     of a silently empty token."""
-    def repl(m: re.Match) -> str:
+    def repl(m: re.Match[str]) -> str:
         name = m.group(1)
         if name == "last":
             return state.last_result if state.last_result is not None else ""
@@ -292,7 +293,7 @@ def _run_if(cmd: If, ctx: ExecutionContext, state: _RunState) -> None:
 
 
 def _run_if_block(cmd: IfBlock, ctx: ExecutionContext,
-                   state: "_RunState") -> None:
+                   state: _RunState) -> None:
     """Block-form conditional. Evaluates the predicate exactly like
     ``_run_if`` and dispatches to the then- or else-body."""
     if cmd.predicate == "err":
